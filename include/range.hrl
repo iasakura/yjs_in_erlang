@@ -1,0 +1,1 @@
+-record(range, {start :: integer(), end_ :: integer()}).

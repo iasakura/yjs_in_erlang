@@ -1,0 +1,1 @@
+-record(update, {update_blocks :: update:update_blocks(), delete_set :: update:delete_set()}).
