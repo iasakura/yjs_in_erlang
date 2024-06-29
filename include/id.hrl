@@ -1,0 +1,1 @@
+-record(id, {client :: state_vector:client_id(), clock :: integer()}).
