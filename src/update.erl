@@ -105,14 +105,17 @@ decode_block(Id, Bin) ->
                     0 ->
                         {undefined, Rest};
                     _ ->
-                        id:read_id(Rest)
+                        {Id, RestId} = id:read_id(Rest),
+                        {{ok, Id}, RestId}
                 end,
             {RightOrigin, RestRO} =
                 case Info band ?HAS_RIGHT_ORIGIN of
                     0 ->
                         {undefined, RestO};
                     _ ->
-                        id:read_id(RestO)
+                        % elp:ignore ???
+                        {Id, RestId} = id:read_id(RestO),
+                        {{ok, Id}, RestId}
                 end,
             {Parent, RestPA} =
                 case CantCopyParentInfo of
@@ -135,23 +138,17 @@ decode_block(Id, Bin) ->
                     true ->
                         {undefined, RestPA}
                 end,
-            {Content, RestItem} = item_content:decode(RestPS),
-            Info =
-                if
-                    item_content:countable(Content) -> ?ITEM_FLAG_COUNTABLE;
-                    true -> 0
-                end,
-            Item = #item{
-                id = Id,
-                left = undefined,
-                origin = Origin,
-                right = undefined,
-                right_origin = RightOrigin,
-                parent = Parent,
-                parent_sub = ParentSub,
-                content = Content,
-                info = Info
-            },
+            {Content, RestItem} = item_content:decode(RestPS, Info),
+            Item = item:new_item(
+                Id,
+                undefined,
+                Origin,
+                undefined,
+                RightOrigin,
+                Parent,
+                ParentSub,
+                Content
+            ),
             {{item, Item}, RestItem}
     end.
 

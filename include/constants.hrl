@@ -58,3 +58,45 @@
 
 % Bit flag (1st bit) used for an item which should be kept - not used atm.
 -define(ITEM_FLAG_KEEP, 2#0000_0001).
+
+% /// Type ref identifier for an [ArrayRef] type.
+% pub const TYPE_REFS_ARRAY: u8 = 0;
+
+% /// Type ref identifier for a [MapRef] type.
+% pub const TYPE_REFS_MAP: u8 = 1;
+
+% /// Type ref identifier for a [TextRef] type.
+% pub const TYPE_REFS_TEXT: u8 = 2;
+
+% /// Type ref identifier for a [XmlElementRef] type.
+% pub const TYPE_REFS_XML_ELEMENT: u8 = 3;
+
+% /// Type ref identifier for a [XmlFragmentRef] type. Used for compatibility.
+% pub const TYPE_REFS_XML_FRAGMENT: u8 = 4;
+
+% /// Type ref identifier for a [XmlHookRef] type. Used for compatibility.
+% pub const TYPE_REFS_XML_HOOK: u8 = 5;
+
+% /// Type ref identifier for a [XmlTextRef] type.
+% pub const TYPE_REFS_XML_TEXT: u8 = 6;
+
+% /// Type ref identifier for a [WeakRef] type.
+% pub const TYPE_REFS_WEAK: u8 = 7;
+
+% /// Type ref identifier for a [DocRef] type.
+% pub const TYPE_REFS_DOC: u8 = 9;
+
+% /// Placeholder type ref identifier for non-specialized AbstractType. Used only for root-level types
+% /// which have been integrated from remote peers before they were defined locally.
+% pub const TYPE_REFS_UNDEFINED: u8 = 15;
+
+-define(TYPE_REFS_ARRAY, 0).
+-define(TYPE_REFS_MAP, 1).
+-define(TYPE_REFS_TEXT, 2).
+-define(TYPE_REFS_XML_ELEMENT, 3).
+-define(TYPE_REFS_XML_FRAGMENT, 4).
+-define(TYPE_REFS_XML_HOOK, 5).
+-define(TYPE_REFS_XML_TEXT, 6).
+-define(TYPE_REFS_WEAK, 7).
+-define(TYPE_REFS_DOC, 9).
+-define(TYPE_REFS_UNDEFINED, 15).

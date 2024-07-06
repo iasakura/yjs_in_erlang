@@ -1,6 +1,6 @@
 -module(string).
 
--export([read_string/1]).
+-export([read_string/1, read_buf/1]).
 
 -spec read_string(binary()) -> {binary(), binary()}.
 read_string(Bin) -> read_buf(Bin).
