@@ -1,0 +1,67 @@
+name: CI
+
+on: push
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: CI
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        otp_version: ['26.1.2']
+        rebar3_version: ['3.22.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp_version }}
+          rebar3-version: ${{ matrix.rebar3_version }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            _build
+          key: build-${{ matrix.otp_version }}-${{ hashFiles('rebar.lock') }}-5
+          restore-keys: |
+            eqWAlizer-${{ matrix.otp_version }}-5-
+      - run: rebar3 fmt --check
+      - run: rebar3 xref
+      - run: rebar3 compile
+      - run: rebar3 eunit
+
+  eqWAlizer:
+    name: type check
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        otp_version: ['26.1.2']
+        rebar3_version: ['3.22.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp_version }}
+          rebar3-version: ${{ matrix.rebar3_version }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            _build
+          key: build-${{ matrix.otp_version }}-${{ hashFiles('rebar.lock') }}-5
+          restore-keys: |
+            eqWAlizer-${{ matrix.otp_version }}-5-
+      - name: Download elp
+        run: |
+          wget https://github.com/WhatsApp/erlang-language-platform/releases/download/2024-04-29/elp-linux-x86_64-unknown-linux-gnu-otp-26.2.tar.gz
+          tar xf elp-linux-x86_64-unknown-linux-gnu-otp-26.2.tar.gz
+      - name: Compile
+        run: rebar3 compile
+      - name: eqWAlizer
+        # eqwalize-all do not return error code on error
+        run: |
+          ./elp eqwalize-all | tee log.txt
+          if ! grep -q "NO ERRORS" log.txt; then
+            exit 1
+          fi

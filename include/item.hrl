@@ -8,7 +8,7 @@
     content :: item_content:item_content(),
     parent :: type_ptr:type_ptr(),
     redone :: option:option(id:id()),
-    parent_sub :: option:option(string()),
+    parent_sub :: option:option(binary()),
     moved :: option:option(id:id()),
     info :: item_flags:item_flags()
 }).

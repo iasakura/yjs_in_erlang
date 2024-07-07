@@ -29,6 +29,11 @@
 
 -type update_blocks() :: #{state_vector:client_id() => [block_carrier()]}.
 
+-spec block_carrier_length(block_carrier()) -> integer().
+block_carrier_length({item, Item}) -> item:length(Item);
+block_carrier_length({gc, Range}) -> Range#block_range.len;
+block_carrier_length({skip, Range}) -> Range#block_range.len.
+
 -spec encode_ranges(ranges()) -> binary().
 encode_ranges(Ranges) ->
     L = length(Ranges),
@@ -113,9 +118,8 @@ decode_block(Id, Bin) ->
                     0 ->
                         {undefined, RestO};
                     _ ->
-                        % elp:ignore ???
-                        {Id, RestId} = id:read_id(RestO),
-                        {{ok, Id}, RestId}
+                        {Id, RestId2} = id:read_id(RestO),
+                        {{ok, Id}, RestId2}
                 end,
             {Parent, RestPA} =
                 case CantCopyParentInfo of
@@ -125,8 +129,8 @@ decode_block(Id, Bin) ->
                                 {Name, RestName} = string:read_string(RestPI),
                                 {{named, Name}, RestName};
                             {_, RestPI} ->
-                                {Name, RestPID} = var_int:decode_uint(RestPI),
-                                {{named, Name}, RestPID}
+                                {Pid, RestPID} = id:read_id(RestPI),
+                                {{id, Pid}, RestPID}
                         end;
                     _ ->
                         {{unknown}, RestRO}
@@ -134,7 +138,8 @@ decode_block(Id, Bin) ->
             {ParentSub, RestPS} =
                 if
                     CantCopyParentInfo and (Info band ?HAS_PARENT_SUB) =/= 0 ->
-                        string:read_string(RestPA);
+                        {PSub, RestPSub} = string:read_string(RestPA),
+                        {{ok, PSub}, RestPSub};
                     true ->
                         {undefined, RestPA}
                 end,
@@ -159,7 +164,7 @@ decode_blocks(Len, ClientId, Clock, Bin) ->
         fun(_I, {Bin1, Blocks, C}) ->
             Id = #id{client = ClientId, clock = C},
             {Block, Rest} = decode_block(Id, Bin1),
-            Size = block:length(Block) > 0,
+            Size = block_carrier_length(Block),
             case Size > 0 of
                 true -> {Rest, [Block | Blocks], C + Size};
                 false -> {Rest, Blocks, C}
