@@ -35,16 +35,16 @@ block_carrier_length({item, Item}) -> item:length(Item);
 block_carrier_length({gc, Range}) -> Range#block_range.len;
 block_carrier_length({skip, Range}) -> Range#block_range.len.
 
--spec encode_ranges(ranges()) -> binary().
-encode_ranges(Ranges) ->
-    L = length(Ranges),
-    lists:foldl(
-        fun({Start, End}, Acc) ->
-            <<(var_int:encode_uint(Start))/binary, (var_int:encode_uint(End))/binary, Acc/binary>>
-        end,
-        var_int:encode_uint(L),
-        Ranges
-    ).
+% -spec encode_ranges(ranges()) -> binary().
+% encode_ranges(Ranges) ->
+%     L = length(Ranges),
+%     lists:foldl(
+%         fun({Start, End}, Acc) ->
+%             <<(var_int:encode_uint(Start))/binary, (var_int:encode_uint(End))/binary, Acc/binary>>
+%         end,
+%         var_int:encode_uint(L),
+%         Ranges
+%     ).
 
 -spec decode_ranges(binary()) -> {ranges(), binary()}.
 decode_ranges(Bin) ->
@@ -61,16 +61,16 @@ decode_ranges(Bin) ->
     end,
     Rec(Len, Bin0, []).
 
--spec encode_id_set(id_set()) -> binary().
-encode_id_set(IdSet) ->
-    N = maps:size(IdSet),
-    maps:fold(
-        fun(ClientId, Ranges, Acc) ->
-            <<(var_int:encode_uint(ClientId))/binary, (encode_ranges(Ranges))/binary, Acc/binary>>
-        end,
-        <<(var_int:encode_uint(N))/binary>>,
-        IdSet
-    ).
+% -spec encode_id_set(id_set()) -> binary().
+% encode_id_set(IdSet) ->
+%     N = maps:size(IdSet),
+%     maps:fold(
+%         fun(ClientId, Ranges, Acc) ->
+%             <<(var_int:encode_uint(ClientId))/binary, (encode_ranges(Ranges))/binary, Acc/binary>>
+%         end,
+%         <<(var_int:encode_uint(N))/binary>>,
+%         IdSet
+%     ).
 
 -spec decode_id_set(binary()) -> {id_set(), binary()}.
 decode_id_set(Bin) ->
@@ -87,9 +87,9 @@ decode_id_set(Bin) ->
     end,
     Rec(Len, Bin0, #{}).
 
--spec encode_delete_set(delete_set()) -> binary().
-encode_delete_set(DeleteSet) ->
-    encode_id_set(DeleteSet).
+% -spec encode_delete_set(delete_set()) -> binary().
+% encode_delete_set(DeleteSet) ->
+%     encode_id_set(DeleteSet).
 
 -spec decode_delete_set(binary()) -> {delete_set(), binary()}.
 decode_delete_set(Bin) -> decode_id_set(Bin).
@@ -162,7 +162,7 @@ decode_block(Id, Bin) ->
 -spec decode_blocks(integer(), state_vector:client_id(), integer(), binary()) ->
     {[block_carrier()], binary()}.
 decode_blocks(Len, ClientId, Clock, Bin) ->
-    {Rest, Blocks, C} = lists:foldl(
+    {Rest, Blocks, _} = lists:foldl(
         fun(_I, {Bin1, Blocks, C}) ->
             Id = #id{client = ClientId, clock = C},
             {Block, Rest} = decode_block(Id, Bin1),
