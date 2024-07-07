@@ -43,7 +43,7 @@ decode_type_ref(Bin) ->
         {?TYPE_REFS_TEXT, Rest} ->
             {{text}, Rest};
         {?TYPE_REFS_XML_ELEMENT, Rest} ->
-            {Buf, Rest1} = string:read_string(Rest),
+            {Buf, Rest1} = binary_encoding:read_string(Rest),
             {{xml_element, Buf}, Rest1};
         {?TYPE_REFS_XML_FRAGMENT, Rest} ->
             {{xml_fragment}, Rest};

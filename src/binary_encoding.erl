@@ -1,4 +1,4 @@
--module(string).
+-module(binary_encoding).
 
 -export([read_string/1, read_buf/1]).
 

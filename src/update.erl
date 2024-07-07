@@ -9,6 +9,7 @@
 -include("../include/block_range.hrl").
 -include("../include/item.hrl").
 -include("../include/constants.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -type block_range() :: #block_range{}.
 
@@ -126,7 +127,7 @@ decode_block(Id, Bin) ->
                     true ->
                         case var_int:decode_uint(RestRO) of
                             {1, RestPI} ->
-                                {Name, RestName} = string:read_string(RestPI),
+                                {Name, RestName} = binary_encoding:read_string(RestPI),
                                 {{named, Name}, RestName};
                             {_, RestPI} ->
                                 {Pid, RestPID} = id:read_id(RestPI),
@@ -137,12 +138,13 @@ decode_block(Id, Bin) ->
                 end,
             {ParentSub, RestPS} =
                 if
-                    CantCopyParentInfo and (Info band ?HAS_PARENT_SUB) =/= 0 ->
-                        {PSub, RestPSub} = string:read_string(RestPA),
+                    CantCopyParentInfo and ((Info band ?HAS_PARENT_SUB) =/= 0) ->
+                        {PSub, RestPSub} = binary_encoding:read_string(RestPA),
                         {{ok, PSub}, RestPSub};
                     true ->
                         {undefined, RestPA}
                 end,
+            ?LOG_DEBUG("Parent: ~p, ParentSub: ~p", [Parent, ParentSub]),
             {Content, RestItem} = item_content:decode(RestPS, Info),
             Item = item:new_item(
                 Id,
