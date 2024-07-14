@@ -1,0 +1,1 @@
+-record(doc, {store :: store:store()}).

@@ -79,3 +79,20 @@ new_item(
                 moved = undefined
             }
     end.
+
+-spec integrate(item(), transaction:transaction_mut(), integer()) -> item().
+integrate(Item, Txn, Offset) ->
+    % 1. Offset > 0 なら thisを諸々調整
+    % - Item.idのclockをoffsetだけ増加
+    % 2. ParentをName/Idを利用しない形へ修正
+    % 3. Item.leftを計算
+    % 4. ParentSubをitem.left/rightから再計算
+    % 5. Item.right を更新
+    % - item.leftがある-> Item.left.rightに、Item.left.rightをItemに更新
+    % - ない -> Item.rightをParentの最左要素に更新
+    % 6. Parentのlenを更新
+    % 7. move周り
+    % 8. Item.contentを登録
+    % 9. txn.changedに登録
+    % 10. parentが削除済みかチェック
+    1.

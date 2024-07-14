@@ -1,7 +1,7 @@
 -module(update).
 
 -export([decode_update/1]).
--export_type([update/0]).
+-export_type([update/0, pending_update/0]).
 
 -include("../include/range.hrl").
 -include("../include/update.hrl").
@@ -29,6 +29,8 @@
     | {skip, block_range()}.
 
 -type update_blocks() :: #{state_vector:client_id() => [block_carrier()]}.
+
+-type pending_update() :: #pending_update{}.
 
 -spec block_carrier_length(block_carrier()) -> integer().
 block_carrier_length({item, Item}) -> item:length(Item);
