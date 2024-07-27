@@ -34,7 +34,7 @@ get(BlockStore, #id{client = Client} = Key) ->
             end
     end.
 
--spec put_item(block_store(), item:item()) -> block_store().
+-spec put_item(block_store(), item:item()) -> true.
 put_item(BlockStore, Item) ->
     #id{client = ClientId} = Item#item.id,
     Table =

@@ -113,8 +113,8 @@ integrate(Item, Txn, Offset) ->
         end,
     Parent =
         case Item0#item.parent of
-            {branch, Branch} -> {ok, Branch};
-            _ -> undefined
+            {branch, Branch} -> Branch;
+            _ -> throw("WIP: support for named/id parent")
         end,
 
     Left = get_item_from_link(Store, Item0#item.left),
@@ -139,7 +139,7 @@ integrate(Item, Txn, Offset) ->
         case Parent of
             {ok, ParentRef} ->
                 if
-                    (Left =/= undefined band -RightIsNullOrHasLeft) bor LeftHasOtherRightThanSelf ->
+                    (Left =/= undefined band RightIsNullOrHasLeft) bor LeftHasOtherRightThanSelf ->
                         Left = compute_left(Store, ParentRef, Item0, Left, Right),
                         Item#item{left = option:map(fun(L) -> L#item.id end, Left)};
                     true ->
@@ -157,8 +157,14 @@ integrate(Item, Txn, Offset) ->
     %     }
     % }
     Item2 = tweak_parent_sub(Store, Item1),
+    reconnect_left_right(Store, Parent, Item2),
+    adjust_length_of_parent(Store, Parent, Item2),
+    % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
 
-    undefined.
+    integrate_content(Store, Item2#item.content),
+    transaction:add_changed_type(),
+    % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
+    check_is_deleted().
 
 -spec compute_left(
     store:store(),
@@ -288,9 +294,9 @@ tweak_parent_sub(Store, Item) ->
 
 -spec reconnect_left_right(
     store:store(),
-    Branch:branch(),
+    branch:branch(),
     item:item()
-) -> item().
+) -> true.
 reconnect_left_right(Store, Parent, This) ->
     case get_item_from_link(Store, This#item.left) of
         {ok, Left} ->
@@ -301,24 +307,95 @@ reconnect_left_right(Store, Parent, This) ->
             store:put_item(
                 Store,
                 Left#item{right = {ok, This#item.id}}
+            ),
+            true;
+        _ ->
+            R =
+                case This#item.parent_sub of
+                    {ok, ParentSub} ->
+                        Loop = fun Loop(CurR) ->
+                            case CurR of
+                                {ok, Item} ->
+                                    case get_item_from_link(Store, Item#item.left) of
+                                        {ok, L} ->
+                                            Loop({ok, L});
+                                        _ ->
+                                            CurR
+                                    end;
+                                _ ->
+                                    CurR
+                            end
+                        end,
+                        Loop(maps:get(ParentSub, Parent#branch.map, undefined));
+                    _ ->
+                        Start = Parent#branch.start,
+                        store:put_branch(Store, Parent#branch{start = {ok, This#item.id}}),
+                        Start
+                end,
+            store:put_item(Store, This#item{right = R}),
+            true
+    end,
+    case get_item_from_link(Store, This#item.right) of
+        {ok, Right} ->
+            store:put_item(
+                Store,
+                Right#item{left = {ok, This#item.id}}
             );
         _ ->
-            R = case This#item.parent_sub of
-                {ok, ParentSub} ->
-                    fun Loop(CurR) ->
-                        case CurR of
-                            {ok, Item} ->
-                                case get_item_from_link(Store, Item#item.left) of
-                                    {ok, L} ->
-                                        Loop({ok, L});
-                                    _ ->
-                                        CurR
-                                end;
-                            _ -> CurR
-                        end
-                    end,
-                    Loop(maps:get(ParentSub, Parent#branch.map, undefined));
+            case This#item.parent_sub of
+                {ok, ParentSubKey} ->
+                    store:put_branch(
+                        Store,
+                        Parent#branch{map = maps:put(ParentSubKey, This#item.id, Parent#branch.map)}
+                    ),
+                    case get_item_from_link(Store, This#item.left) of
+                        {ok, _Left2} ->
+                            % WIP: support `weak` feature
+                            % WIP: txn.delete(Left)
+                            true;
+                        _ ->
+                            true
+                    end;
                 _ ->
-                    
-            end,
+                    true
+            end
+    end.
+
+-spec is_deleted(item:item()) -> boolean().
+is_deleted(Item) ->
+    case Item#item.info band ?ITEM_FLAG_DELETED of
+        0 -> false;
+        _ -> true
+    end.
+
+-spec is_countable(item:item()) -> boolean().
+is_countable(Item) ->
+    case Item#item.info band ?ITEM_FLAG_COUNTABLE of
+        0 -> false;
+        _ -> true
+    end.
+-spec content_len(item:item()) -> integer().
+content_len(Item) -> item_content:len(Item#item.content).
+
+-spec adjust_length_of_parent(
+    store:store(),
+    branch:branch(),
+    item:item()
+) -> true.
+adjust_length_of_parent(Store, Parent, This) ->
+    case option:is_none(This#item.parent_sub) and is_deleted(This) of
+        true ->
+            case is_countable(This) of
+                true ->
+                    BlockLen = Parent#branch.block_len + This#item.len,
+                    ContentLen = Parent#branch.content_len + content_len(This),
+                    store:put_branch(Store, Parent#branch{
+                        block_len = BlockLen, content_len = ContentLen
+                    });
+                _ ->
+                    % WIP: support `weak` feature
+                    true
+            end;
+        _ ->
+            true
     end.

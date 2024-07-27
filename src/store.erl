@@ -1,14 +1,10 @@
 -module(store).
 
--export([get_item/2]).
+-export([get_item/2, put_item/2, put_branch/2]).
 
 -export_type([store/0]).
 
 -include("../include/store.hrl").
--include("../include/id.hrl").
--include("../include/item.hrl").
--include("../include/block_store.hrl").
-
 -type store() :: #store{}.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).
@@ -19,6 +15,10 @@ get_item(Store, Id) ->
         undefined -> {error, not_found}
     end.
 
--spec put_item(store(), item:item()) -> store().
+-spec put_item(store(), item:item()) -> true.
 put_item(Store, Item) ->
     block_store:put_item(Store#store.blocks, {item, Item}).
+
+-spec put_branch(store(), branch:branch()) -> true.
+put_branch(Store, Branch) ->
+    node_registry:put(Store#store.node_registry, {branch, Branch}).
