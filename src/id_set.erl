@@ -7,3 +7,5 @@
 -type id_set() :: #{state_vector:client_id() => id_range()}.
 
 -type delete_set() :: id_set().
+
+-spec insert()

@@ -1,6 +1,6 @@
 -module(item).
 
--export([new_item/8, integrate/3, length/1]).
+-export([new_item/8, integrate/3, length/1, is_deleted/1]).
 -export_type([item/0]).
 
 -include("../include/item.hrl").
@@ -113,8 +113,8 @@ integrate(Item, Txn, Offset) ->
         end,
     Parent =
         case Item0#item.parent of
-            {branch, Branch} -> Branch;
-            _ -> throw("WIP: support for named/id parent")
+            {branch, Branch} -> {ok, Branch};
+            _ -> undefined
         end,
 
     Left = get_item_from_link(Store, Item0#item.left),
@@ -135,36 +135,28 @@ integrate(Item, Txn, Offset) ->
                     get_item_from_link(Store, Item#item.right)
         end,
 
-    Item1 =
-        case Parent of
-            {ok, ParentRef} ->
+    case Parent of
+        {ok, ParentRef} ->
+            Item1 =
                 if
                     (Left =/= undefined band RightIsNullOrHasLeft) bor LeftHasOtherRightThanSelf ->
                         Left = compute_left(Store, ParentRef, Item0, Left, Right),
                         Item#item{left = option:map(fun(L) -> L#item.id end, Left)};
                     true ->
-                        Item
-                end
-        end,
+                        Item0
+                end,
+            Item2 = tweak_parent_sub(Store, Item1),
+            reconnect_left_right(Store, Parent, Item2),
+            adjust_length_of_parent(Store, Parent, Item2),
+            % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
 
-    % if this.parent_sub.is_none() {
-    %     if let Some(item) = this.left.as_deref() {
-    %         if item.parent_sub.is_some() {
-    %             this.parent_sub = item.parent_sub.clone();
-    %         } else if let Some(item) = this.right.as_deref() {
-    %              this.parent_sub = item.parent_sub.clone();
-    %         }
-    %     }
-    % }
-    Item2 = tweak_parent_sub(Store, Item1),
-    reconnect_left_right(Store, Parent, Item2),
-    adjust_length_of_parent(Store, Parent, Item2),
-    % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
-
-    integrate_content(Store, Item2#item.content),
-    transaction:add_changed_type(),
-    % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
-    check_is_deleted().
+            integrate_content(Store, Item2#item.content),
+            transaction:add_changed_type(Txn, ParentRef, Item2#item.parent_sub),
+            % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
+            check_is_deleted();
+        _ ->
+            false
+    end.
 
 -spec compute_left(
     store:store(),
@@ -396,6 +388,29 @@ adjust_length_of_parent(Store, Parent, This) ->
                     % WIP: support `weak` feature
                     true
             end;
+        _ ->
+            true
+    end.
+
+-spec integrate_content(transaction:transaction_mut(), item:item()) -> true.
+integrate_content(TransactionMut, Item) ->
+    ItemContent = Item#item.content,
+    Store = TransactionMut#transaction_mut.store,
+    case ItemContent of
+        {deleted, Len} ->
+            id_set:insert(TransactionMut#transaction_mut.delete_set, Len),
+            store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED});
+        % wip: { type, Move }
+        % wip: { type, Doc }
+        {format, Format} ->
+            true;
+        {type, Branch} ->
+            _Ptr =
+                case Item#item.info band ?ITEM_FLAG_DELETED of
+                    0 -> store:register(Branch);
+                    _ -> Branch
+                end,
+            true;
         _ ->
             true
     end.
