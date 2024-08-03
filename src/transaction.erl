@@ -13,16 +13,16 @@
 -type transaction_mut() :: #transaction_mut{}.
 
 -spec apply_update(transaction_mut(), update:update()) -> transaction_mut().
-apply_update(Transaction, Update) -> true.
+apply_update(Transaction, Update) -> throw("wip").
 
 -spec add_changed_type(transaction_mut(), branch:branch(), option:option(binary())) ->
     transaction_mut().
-add_changed_type(Transaction, Parent, ParentSub) ->
+add_changed_type(Txn, Parent, ParentSub) ->
     Trigger =
-        case Parent#branch.item of
+        case util:get_item_from_link(Txn#transaction_mut.store, Parent#branch.item) of
             {ok, Item} ->
                 #id{client = Client, clock = Clock} = Item#item.id,
-                TxnClock = maps:get(Transaction#transaction_mut.before_state, Client),
+                TxnClock = maps:get(Client, Txn#transaction_mut.before_state),
                 Clock < TxnClock andalso not item:is_deleted(Item);
             _ ->
                 true
@@ -30,12 +30,12 @@ add_changed_type(Transaction, Parent, ParentSub) ->
     case Trigger of
         true ->
             ChangedSet = maps:get(
-                {branch, Parent}, Transaction#transaction_mut.changed, sets:new()
+                {branch, Parent}, Txn#transaction_mut.changed, sets:new()
             ),
             Added = sets:add_element(ParentSub, ChangedSet),
-            Transaction#transaction_mut{
-                changed = maps:put({branch, Parent}, Added, Transaction#transaction_mut.changed)
+            Txn#transaction_mut{
+                changed = maps:put({branch, Parent}, Added, Txn#transaction_mut.changed)
             };
         _ ->
-            true
+            Txn
     end.

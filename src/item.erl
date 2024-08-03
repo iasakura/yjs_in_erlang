@@ -3,6 +3,8 @@
 -export([new_item/8, integrate/3, len/1, is_deleted/1]).
 -export_type([item/0]).
 
+-import(util, [get_item_from_link/2]).
+
 -include("../include/item.hrl").
 -include("../include/branch.hrl").
 -include("../include/constants.hrl").
@@ -86,14 +88,7 @@ new_item(
 -spec last_id(item:item()) -> id:id().
 last_id(Item) -> Item#item.id#id{clock = Item#item.id#id.clock + len(Item) - 1}.
 
--spec get_item_from_link(store:store(), option:option(id:id())) -> option:option(item:item()).
-get_item_from_link(Store, Link) ->
-    case Link of
-        {ok, Id} -> store:get_item(Store, Id);
-        _ -> undefined
-    end.
-
--spec integrate(item(), transaction:transaction_mut(), integer()) -> item().
+-spec integrate(item(), transaction:transaction_mut(), integer()) -> boolean().
 integrate(Item, Txn, Offset) ->
     % 1. Offset > 0 なら thisを諸々調整
     % - Item.idのclockをoffsetだけ増加
@@ -177,7 +172,7 @@ integrate(Item, Txn, Offset) ->
             adjust_length_of_parent(Store, Parent, Item2),
             % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
 
-            integrate_content(Txn, Item2#item.content),
+            integrate_content(Txn, Item2),
             transaction:add_changed_type(Txn, Parent, Item2#item.parent_sub),
             % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
             check_deleted(Store, Parent, Item2);
@@ -359,7 +354,8 @@ reconnect_left_right(Store, Parent, This) ->
             store:put_item(
                 Store,
                 Right#item{left = {ok, This#item.id}}
-            );
+            ),
+            true;
         _ ->
             case This#item.parent_sub of
                 {ok, ParentSubKey} ->
@@ -410,7 +406,8 @@ adjust_length_of_parent(Store, Parent, This) ->
                     ContentLen = Parent#branch.content_len + content_len(This),
                     store:put_branch(Store, Parent#branch{
                         block_len = BlockLen, content_len = ContentLen
-                    });
+                    }),
+                    true;
                 _ ->
                     % WIP: support `weak` feature
                     true
@@ -426,7 +423,8 @@ integrate_content(TransactionMut, Item) ->
     case ItemContent of
         {deleted, Len} ->
             id_set:insert(TransactionMut#transaction_mut.delete_set, Item#item.id, Len),
-            store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED});
+            store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED}),
+            true;
         % wip: { type, Move }
         % wip: { type, Doc }
         {format, _} ->
@@ -444,15 +442,16 @@ integrate_content(TransactionMut, Item) ->
 
 -spec check_deleted(store:store(), branch:branch(), item:item()) -> boolean().
 check_deleted(Store, Parent, Item) ->
-    case Parent of
-        {branch, Branch} ->
-            case get_item_from_link(Store, Branch#branch.item) of
-                {ok, Item} -> is_deleted(Item);
-                _ -> false
-            end;
-        _ ->
-            false
-    end,
-    is_deleted(Parent) orelse
+    ParentDeleted =
+        case Parent of
+            {branch, Branch} ->
+                case get_item_from_link(Store, Branch#branch.item) of
+                    {ok, Item} -> is_deleted(Item);
+                    _ -> false
+                end;
+            _ ->
+                false
+        end,
+    ParentDeleted orelse
         (Item#item.parent_sub =/= undefined andalso
             option:is_some(get_item_from_link(Store, Item#item.right))).

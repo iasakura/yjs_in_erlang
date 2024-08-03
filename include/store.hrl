@@ -37,7 +37,7 @@
 
 -record(store, {
     types :: #{binary() => branch:branch()},
-    node_registry :: sets:set(branch:branch()),
+    node_registry :: node_registry:node_registry(),
     blocks :: block_store:block_store(),
     pending :: option:option(update:pending_update()),
     pending_ds :: option:option(id_set:delete_set()),
