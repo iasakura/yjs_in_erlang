@@ -33,7 +33,7 @@
 -type pending_update() :: #pending_update{}.
 
 -spec block_carrier_length(block_carrier()) -> integer().
-block_carrier_length({item, Item}) -> item:length(Item);
+block_carrier_length({item, Item}) -> item:len(Item);
 block_carrier_length({gc, Range}) -> Range#block_range.len;
 block_carrier_length({skip, Range}) -> Range#block_range.len.
 

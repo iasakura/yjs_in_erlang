@@ -15,10 +15,12 @@ get_item(Store, Id) ->
         undefined -> {error, not_found}
     end.
 
--spec put_item(store(), item:item()) -> true.
+-spec put_item(store(), item:item()) -> item:item().
 put_item(Store, Item) ->
-    block_store:put_item(Store#store.blocks, {item, Item}).
+    block_store:put_item(Store#store.blocks, {item, Item}),
+    Item.
 
--spec put_branch(store(), branch:branch()) -> true.
+-spec put_branch(store(), branch:branch()) -> branch:branch().
 put_branch(Store, Branch) ->
-    node_registry:put(Store#store.node_registry, {branch, Branch}).
+    node_registry:put(Store#store.node_registry, {branch, Branch}),
+    Branch.

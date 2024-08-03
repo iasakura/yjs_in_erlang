@@ -1,6 +1,6 @@
 -module(item).
 
--export([new_item/8, integrate/3, length/1, is_deleted/1]).
+-export([new_item/8, integrate/3, len/1, is_deleted/1]).
 -export_type([item/0]).
 
 -include("../include/item.hrl").
@@ -8,11 +8,12 @@
 -include("../include/constants.hrl").
 -include("../include/transaction.hrl").
 -include("../include/id.hrl").
+-include("../include/store.hrl").
 
 -type item() :: #item{}.
 
--spec length(item()) -> integer().
-length(Item) -> Item#item.len.
+-spec len(item()) -> integer().
+len(Item) -> Item#item.len.
 
 -spec new_item(
     id:id(),
@@ -82,6 +83,9 @@ new_item(
             }
     end.
 
+-spec last_id(item:item()) -> id:id().
+last_id(Item) -> Item#item.id#id{clock = Item#item.id#id.clock + len(Item) - 1}.
+
 -spec get_item_from_link(store:store(), option:option(id:id())) -> option:option(item:item()).
 get_item_from_link(Store, Link) ->
     case Link of
@@ -108,10 +112,33 @@ integrate(Item, Txn, Offset) ->
     Item0 =
         case Offset > 0 of
             % WIP
-            true -> Item;
-            false -> Item
+            true ->
+                begin
+                    NewItem = Item#item{
+                        id = Item#item.id#id{clock = Item#item.id#id.clock + Offset},
+                        left = begin
+                            Id = #id{
+                                client = Item#item.id#id.client,
+                                clock = Item#item.id#id.clock - 1
+                            },
+                            Slice = block_store:get_item_clean_end(Store#store.blocks, Id),
+                            option:map(fun(S) -> store:materialize(Store, S) end, Slice)
+                        end,
+                        origin = option:map(
+                            fun(I) -> last_id(I) end, get_item_from_link(Store, Item#item.left)
+                        ),
+                        content = begin
+                            {ok, {_, Content2}} = item_content:split(Item#item.content, Offset),
+                            Content2
+                        end,
+                        len = Item#item.len - Offset
+                    },
+                    NewItem
+                end;
+            false ->
+                Item
         end,
-    Parent =
+    ParentOpt =
         case Item0#item.parent of
             {branch, Branch} -> {ok, Branch};
             _ -> undefined
@@ -135,12 +162,12 @@ integrate(Item, Txn, Offset) ->
                     get_item_from_link(Store, Item#item.right)
         end,
 
-    case Parent of
-        {ok, ParentRef} ->
+    case ParentOpt of
+        {ok, Parent} ->
             Item1 =
                 if
-                    (Left =/= undefined band RightIsNullOrHasLeft) bor LeftHasOtherRightThanSelf ->
-                        Left = compute_left(Store, ParentRef, Item0, Left, Right),
+                    (Left =/= undefined band RightIsNullOrHasLeft) orelse LeftHasOtherRightThanSelf ->
+                        Left = compute_left(Store, Parent, Item0, Left, Right),
                         Item#item{left = option:map(fun(L) -> L#item.id end, Left)};
                     true ->
                         Item0
@@ -150,10 +177,10 @@ integrate(Item, Txn, Offset) ->
             adjust_length_of_parent(Store, Parent, Item2),
             % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
 
-            integrate_content(Store, Item2#item.content),
-            transaction:add_changed_type(Txn, ParentRef, Item2#item.parent_sub),
+            integrate_content(Txn, Item2#item.content),
+            transaction:add_changed_type(Txn, Parent, Item2#item.parent_sub),
             % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
-            check_is_deleted();
+            check_deleted(Store, Parent, Item2);
         _ ->
             false
     end.
@@ -398,11 +425,11 @@ integrate_content(TransactionMut, Item) ->
     Store = TransactionMut#transaction_mut.store,
     case ItemContent of
         {deleted, Len} ->
-            id_set:insert(TransactionMut#transaction_mut.delete_set, Len),
+            id_set:insert(TransactionMut#transaction_mut.delete_set, Item#item.id, Len),
             store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED});
         % wip: { type, Move }
         % wip: { type, Doc }
-        {format, Format} ->
+        {format, _} ->
             true;
         {type, Branch} ->
             _Ptr =
@@ -414,3 +441,18 @@ integrate_content(TransactionMut, Item) ->
         _ ->
             true
     end.
+
+-spec check_deleted(store:store(), branch:branch(), item:item()) -> boolean().
+check_deleted(Store, Parent, Item) ->
+    case Parent of
+        {branch, Branch} ->
+            case get_item_from_link(Store, Branch#branch.item) of
+                {ok, Item} -> is_deleted(Item);
+                _ -> false
+            end;
+        _ ->
+            false
+    end,
+    is_deleted(Parent) orelse
+        (Item#item.parent_sub =/= undefined andalso
+            option:is_some(get_item_from_link(Store, Item#item.right))).
