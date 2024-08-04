@@ -5,6 +5,8 @@
 -export_type([store/0]).
 
 -include("../include/store.hrl").
+-include("../include/item_slice.hrl").
+-include("../include/item.hrl").
 -type store() :: #store{}.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).
@@ -24,3 +26,43 @@ put_item(Store, Item) ->
 put_branch(Store, Branch) ->
     node_registry:put(Store#store.node_registry, Branch),
     Branch.
+
+-spec materialize(store(), item_slice:item_slice()) -> item:item().
+materialize(Store, Slice) ->
+    Slice1 =
+        case item_slice:adjacent_left(Slice) of
+            true ->
+                Slice;
+            false ->
+                case item:split(item#item_slice.item, Slice#item_slice.start) of
+                    {ok, {Item1, Item2}} ->
+                        put_item(Store, Item1),
+                        put_item(Store, Item2),
+                        #item_slice{
+                            item = Item1,
+                            start = 0,
+                            end_ = Slice#item_slice.end_ - Slice#item_slice.start
+                        };
+                    undefined ->
+                        Slice
+                end
+        end,
+    Slice2 =
+        case item_slice:adjacent_right(Slice1) of
+            false ->
+                case item:split(item#item_slice.item, item_slice:len(Slice1)) of
+                    {ok, {Item1, Item2}} ->
+                        put_item(Store, Item1),
+                        put_item(Store, Item2),
+                        #item_slice{
+                            item = Item1,
+                            start = 0,
+                            end_ = Slice#item_slice.end_ - Slice#item_slice.start
+                        };
+                    undefined ->
+                        Slice
+                end;
+            true ->
+                Slice1
+        end,
+    Slice2#item_slice.item.

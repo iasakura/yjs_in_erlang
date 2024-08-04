@@ -455,3 +455,5 @@ check_deleted(Store, Parent, Item) ->
     ParentDeleted orelse
         (Item#item.parent_sub =/= undefined andalso
             option:is_some(get_item_from_link(Store, Item#item.right))).
+
+-spec split(item(), integer()) -> {item(), item()}.

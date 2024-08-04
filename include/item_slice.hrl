@@ -1,0 +1,1 @@
+-record(item_slice, {item :: item:item(), start :: integer(), end_ :: integer()}).

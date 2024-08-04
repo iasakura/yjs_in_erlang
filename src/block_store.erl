@@ -1,7 +1,7 @@
 -module(block_store).
 
 -export([new/0, put_item/2, get/2, get_item_clean_end/2]).
--export_type([block_store/0, item_slice/0]).
+-export_type([block_store/0]).
 
 -include("../include/block_store.hrl").
 -include("../include/id.hrl").
@@ -10,7 +10,6 @@
 -opaque block_store() :: ets:table().
 % -type client_block_list() :: #client_block_list{}.
 -type client_block_list() :: ets:table().
--type item_slice() :: #item_slice{}.
 
 -spec new() -> block_store().
 new() -> ets:new(block_store, [set, {keypos, #block_store_item.client}]).
@@ -54,7 +53,7 @@ put_item(BlockStore, Item) ->
         end,
     ets:insert(Table, Item).
 
--spec get_item_clean_end(block_store(), id:id()) -> option:option(item_slice()).
+-spec get_item_clean_end(block_store(), id:id()) -> option:option(item_slice:item_slice()).
 get_item_clean_end(Store, Id) ->
     maybe
         {ok, Item} ?= get_item(Store, Id),
