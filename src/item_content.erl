@@ -1,6 +1,6 @@
 -module(item_content).
 
--export([countable/1, decode/2, len/1]).
+-export([countable/1, decode/2, len/1, split/2]).
 -export_type([item_content/0]).
 
 -include("../include/constants.hrl").
