@@ -6,7 +6,6 @@
 
 -include("../include/store.hrl").
 -include("../include/item_slice.hrl").
--include("../include/item.hrl").
 -type store() :: #store{}.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).
@@ -62,8 +61,3 @@ materialize(Store, Slice) ->
                 Slice1
         end,
     Slice2#item_slice.item.
-
--spec register(store:store(), branch:branch()) -> ok.
-register(Store, Branch) ->
-    put_branch(Store, Branch),
-    ok.
