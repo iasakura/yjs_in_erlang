@@ -1,6 +1,6 @@
 -module(item).
 
--export([new_item/8, integrate/3, len/1, is_deleted/1]).
+-export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3]).
 -export_type([item/0]).
 
 -import(util, [get_item_from_link/2]).
@@ -117,7 +117,14 @@ integrate(Item, Txn, Offset) ->
                                 clock = Item#item.id#id.clock - 1
                             },
                             Slice = block_store:get_item_clean_end(Store#store.blocks, Id),
-                            option:map(fun(S) -> store:materialize(Store, S) end, Slice)
+                            I = option:map(
+                                fun(S) ->
+                                    I = store:materialize(Store, S),
+                                    I#item.id
+                                end,
+                                Slice
+                            ),
+                            I
                         end,
                         origin = option:map(
                             fun(I) -> last_id(I) end, get_item_from_link(Store, Item#item.left)
@@ -432,7 +439,7 @@ integrate_content(TransactionMut, Item) ->
         {type, Branch} ->
             _Ptr =
                 case Item#item.info band ?ITEM_FLAG_DELETED of
-                    0 -> store:register(Branch);
+                    0 -> store:put_branch(Store, Branch);
                     _ -> Branch
                 end,
             true;
@@ -456,4 +463,44 @@ check_deleted(Store, Parent, Item) ->
         (Item#item.parent_sub =/= undefined andalso
             option:is_some(get_item_from_link(Store, Item#item.right))).
 
--spec split(item(), integer()) -> {item(), item()}.
+% TODO: OffsetKind
+-spec splice(store:store(), item(), integer()) -> option:option(item()).
+splice(Store, Item, Offset) ->
+    case Offset =:= 0 of
+        true ->
+            undefined;
+        false ->
+            Client = Item#item.id#id.client,
+            Clock = Item#item.id#id.clock,
+            {ok, {Content1, Content2}} = item_content:split(Item#item.content, Offset),
+            New = Item#item{
+                id = #id{client = Client, clock = Clock + Offset},
+                len = item_content:len(Content2),
+                content = Content2,
+                left = {ok, Item#item.id}
+            },
+            store:put_item(Store, Item#item{
+                content = Content1,
+                right = {ok, New#item.id}
+            }),
+            store:put_item(Store, New),
+            case Item#item.parent_sub of
+                undefined ->
+                    true;
+                {ok, Sub} ->
+                    case Item#item.right of
+                        {ok, _} ->
+                            true;
+                        undefined ->
+                            case Item#item.parent of
+                                {branch, Branch} ->
+                                    store:put_branch(Store, Branch#branch{
+                                        map = maps:put(Sub, New#item.id, Branch#branch.map)
+                                    });
+                                _ ->
+                                    true
+                            end
+                    end
+            end,
+            {ok, New}
+    end.

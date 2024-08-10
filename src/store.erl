@@ -1,6 +1,6 @@
 -module(store).
 
--export([get_item/2, put_item/2, put_branch/2]).
+-export([get_item/2, put_item/2, put_branch/2, materialize/2]).
 
 -export_type([store/0]).
 
@@ -34,12 +34,10 @@ materialize(Store, Slice) ->
             true ->
                 Slice;
             false ->
-                case item:split(item#item_slice.item, Slice#item_slice.start) of
-                    {ok, {Item1, Item2}} ->
-                        put_item(Store, Item1),
-                        put_item(Store, Item2),
+                case item:splice(Store, Slice#item_slice.item, Slice#item_slice.start) of
+                    {ok, NewItem} ->
                         #item_slice{
-                            item = Item1,
+                            item = NewItem,
                             start = 0,
                             end_ = Slice#item_slice.end_ - Slice#item_slice.start
                         };
@@ -50,19 +48,22 @@ materialize(Store, Slice) ->
     Slice2 =
         case item_slice:adjacent_right(Slice1) of
             false ->
-                case item:split(item#item_slice.item, item_slice:len(Slice1)) of
-                    {ok, {Item1, Item2}} ->
-                        put_item(Store, Item1),
-                        put_item(Store, Item2),
+                case item:splice(Store, Slice#item_slice.item, item_slice:len(Slice1)) of
+                    {ok, NewItem2} ->
                         #item_slice{
-                            item = Item1,
+                            item = NewItem2,
                             start = 0,
-                            end_ = Slice#item_slice.end_ - Slice#item_slice.start
+                            end_ = Slice1#item_slice.end_ - Slice1#item_slice.start
                         };
                     undefined ->
-                        Slice
+                        Slice1
                 end;
             true ->
                 Slice1
         end,
     Slice2#item_slice.item.
+
+-spec register(store:store(), branch:branch()) -> ok.
+register(Store, Branch) ->
+    put_branch(Store, Branch),
+    ok.
