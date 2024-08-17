@@ -40,7 +40,7 @@
     node_registry :: node_registry:node_registry(),
     blocks :: block_store:block_store(),
     pending :: option:option(update:pending_update()),
-    pending_ds :: option:option(id_set:delete_set()),
+    pending_ds :: option:option(update:delete_set()),
     subdocs :: #{reference() => doc:doc()},
     % events :: option:option(store_events:store_events()),
     parent :: option:option(id:id()),

@@ -5,5 +5,3 @@
 -record(client_block_cell, {list :: [block:block_cell()]}).
 
 -record(client_block, {start :: integer(), cell :: block:block_cell()}).
-
--record(item_slice, {item :: item:item(), start :: integer(), end_ :: integer()}).

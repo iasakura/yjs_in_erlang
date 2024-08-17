@@ -44,7 +44,7 @@
     before_state :: state_vector:state_vector(),
     after_state :: state_vector:state_vector(),
     merge_blocks :: [id:id()],
-    delete_set :: id_set:delete_set(),
+    delete_set :: update:delete_set(),
     prev_moved :: #{id:id() => id:id()},
     changed :: #{type_ptr:type_ptr() => sets:set(option:option(binary()))},
     changed_parent_types :: [branch:branch()],

@@ -1,15 +1,13 @@
 -module(block_store).
 
--export([new/0, put_item/2, get/2, get_item_clean_end/2]).
--export_type([block_store/0]).
+-export([new/0, put_item/2, get/2, get_item_clean_end/2, get_clock/2, get_client/2, find_pivot/2]).
+-export_type([block_store/0, client_block_list/0]).
 
--include("../include/block_store.hrl").
--include("../include/id.hrl").
--include("../include/item.hrl").
+-include("../include/records.hrl").
 
 -opaque block_store() :: ets:table().
 % -type client_block_list() :: #client_block_list{}.
--type client_block_list() :: ets:table().
+-opaque client_block_list() :: ets:table().
 
 -spec new() -> block_store().
 new() -> ets:new(block_store, [set, {keypos, #block_store_item.client}]).
@@ -18,9 +16,16 @@ new() -> ets:new(block_store, [set, {keypos, #block_store_item.client}]).
 add_client(BlockStore, Client) ->
     Table = ets:new(client_block_list, [set, {keypos, #client_block.start}]),
     ets:insert(BlockStore, #block_store_item{
-        client = Client, table = ets:new(client_block_list, [set])
+        client = Client, table = Table
     }),
     Table.
+
+-spec get_client(block_store(), state_vector:client_id()) -> option:option(client_block_list()).
+get_client(BlockStore, Client) ->
+    case ets:lookup(BlockStore, Client) of
+        [] -> undefined;
+        [{_, Table}] -> {ok, Table}
+    end.
 
 -spec get(block_store(), id:id()) -> option:option(block:block_cell()).
 get(BlockStore, #id{client = Client} = Key) ->
@@ -30,7 +35,7 @@ get(BlockStore, #id{client = Client} = Key) ->
         [{_, ClientBlockList}] ->
             case ets:lookup(ClientBlockList, Key) of
                 [] -> undefined;
-                [{_, Block}] -> Block
+                [{_, Block}] -> {ok, Block}
             end
     end.
 
@@ -62,4 +67,23 @@ get_item_clean_end(Store, Id) ->
         {ok, #item_slice{item = Item, start = 0, end_ = Offset}}
     else
         _ -> undefined
+    end.
+
+-spec get_clock(block_store(), state_vector:client_id()) -> integer().
+get_clock(BlockStore, Client) ->
+    case ets:lookup(BlockStore, Client) of
+        [{_, Table}] -> ets:foldl(fun(Item, Acc) -> max(Item#item.id#id.clock, Acc) end, 0, Table)
+    end.
+
+-spec find_pivot(client_block_list(), integer()) -> option:option({integer(), block:block_cell()}).
+find_pivot(Table, Clock) ->
+    case ets:next(Table, {Clock - 1}) of
+        Key when is_integer(Key) ->
+            case ets:lookup(Table, Key) of
+                [] -> throw("unreachable");
+                [#client_block{start = Start, cell = Block}] -> {ok, {Start, Block}};
+                _ -> throw("y_erl invariant is broken: more than one item has the same clock")
+            end;
+        _ ->
+            undefined
     end.

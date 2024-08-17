@@ -1,12 +1,26 @@
 -module(store).
 
--export([get_item/2, put_item/2, put_branch/2, materialize/2]).
+-export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2]).
 
 -export_type([store/0]).
 
 -include("../include/store.hrl").
 -include("../include/item_slice.hrl").
+
 -type store() :: #store{}.
+
+-spec new() -> store().
+new() ->
+    #store{
+        types = #{},
+        node_registry = node_registry:new(),
+        blocks = block_store:new(),
+        pending = undefined,
+        pending_ds = undefined,
+        subdocs = #{},
+        parent = undefined,
+        linked_by = #{}
+    }.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).
 get_item(Store, Id) ->

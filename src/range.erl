@@ -21,3 +21,9 @@ try_join(R1, R2) ->
                 end_ = max(R1#range.end_, R2#range.end_)
             }}
     end.
+
+-spec decode_range(binary()) -> {range(), binary()}.
+decode_range(Bin) ->
+    {Start, Bin1} = var_int:decode_uint(Bin),
+    {End, Bin2} = var_int:decode_uint(Bin1),
+    {{range, Start, End}, Bin2}.
