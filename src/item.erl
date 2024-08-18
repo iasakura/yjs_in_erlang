@@ -1,6 +1,6 @@
 -module(item).
 
--export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3]).
+-export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3, is_countable/1]).
 -export_type([item/0]).
 
 -import(util, [get_item_from_link/2]).
@@ -464,7 +464,7 @@ check_deleted(Store, Parent, Item) ->
             option:is_some(get_item_from_link(Store, Item#item.right))).
 
 % TODO: OffsetKind
--spec splice(store:store(), item(), integer()) -> option:option(item()).
+-spec splice(store:store(), item(), integer()) -> option:option({item(), item()}).
 splice(Store, Item, Offset) ->
     case Offset =:= 0 of
         true ->
@@ -473,17 +473,18 @@ splice(Store, Item, Offset) ->
             Client = Item#item.id#id.client,
             Clock = Item#item.id#id.clock,
             {ok, {Content1, Content2}} = item_content:split(Item#item.content, Offset),
-            New = Item#item{
+            New2 = Item#item{
                 id = #id{client = Client, clock = Clock + Offset},
                 len = item_content:len(Content2),
                 content = Content2,
                 left = {ok, Item#item.id}
             },
-            store:put_item(Store, Item#item{
+            New1 = Item#item{
                 content = Content1,
-                right = {ok, New#item.id}
-            }),
-            store:put_item(Store, New),
+                right = {ok, New2#item.id}
+            },
+            store:put_item(Store, New1),
+            store:put_item(Store, New2),
             case Item#item.parent_sub of
                 undefined ->
                     true;
@@ -495,12 +496,12 @@ splice(Store, Item, Offset) ->
                             case Item#item.parent of
                                 {branch, Branch} ->
                                     store:put_branch(Store, Branch#branch{
-                                        map = maps:put(Sub, New#item.id, Branch#branch.map)
+                                        map = maps:put(Sub, New2#item.id, Branch#branch.map)
                                     });
                                 _ ->
                                     true
                             end
                     end
             end,
-            {ok, New}
+            {ok, {New1, New2}}
     end.

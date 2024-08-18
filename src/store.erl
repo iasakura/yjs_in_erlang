@@ -1,6 +1,6 @@
 -module(store).
 
--export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2]).
+-export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2, delete_branch/2]).
 
 -export_type([store/0]).
 
@@ -38,6 +38,11 @@ put_item(Store, Item) ->
 -spec put_branch(store(), branch:branch()) -> branch:branch().
 put_branch(Store, Branch) ->
     node_registry:put(Store#store.node_registry, Branch),
+    Branch.
+
+-spec delete_branch(store(), branch:branch()) -> branch:branch().
+delete_branch(Store, Branch) ->
+    node_registry:delete(Store#store.node_registry, Branch),
     Branch.
 
 -spec materialize(store(), item_slice:item_slice()) -> item:item().

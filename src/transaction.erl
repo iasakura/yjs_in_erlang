@@ -4,6 +4,7 @@
 -export_type([transaction_mut/0, subdocs/0]).
 
 -include("../include/records.hrl").
+-include("../include/constants.hrl").
 
 -type subdocs() :: #subdocs{}.
 
@@ -73,7 +74,7 @@ apply_update(Transaction, Update) ->
         false ->
             ok;
         true ->
-            NewStore = Store#store{pending = {ok, NewPending}, pending_ds = NewPendingDs},
+            NewStore = Store#store{pending = NewPending, pending_ds = NewPendingDs},
             PendingDs2 =
                 case NewStore#store.pending_ds of
                     undefined -> id_set:new();
@@ -86,14 +87,113 @@ apply_update(Transaction, Update) ->
 
     Transaction.
 
--spec delete_by_range(block_store:client_block_list(), integer(), integer()) -> [range:range()].
-delete_by_range(Blocks, Clock, ClockEnd) ->
+-spec delete_item(transaction:transaction_mut(), item:item()) -> transaction:transaction_mut().
+delete_item(Txn, Item) ->
+    Store = Txn#transaction_mut.store,
+    case item:is_deleted(Item) of
+        true ->
+            ok;
+        false ->
+            case option:is_none(Item#item.parent_sub) andalso item:is_countable(Item) of
+                false ->
+                    Txn;
+                true ->
+                    case Item#item.parent of
+                        undefined ->
+                            ok;
+                        {branch, Branch} ->
+                            store:put_branch(Store, Branch#branch{
+                                block_len = Branch#branch.block_len - Item#item.len,
+                                content_len = Branch#branch.content_len - item:content_len(Item)
+                            })
+                    end,
+                    store:put_item(
+                        Store,
+                        Item#item{
+                            info = Item#item.info bor ?ITEM_FLAG_DELETED
+                        }
+                    ),
+                    Txn2 = Txn#transaction_mut{
+                        delete_set = id_set:insert(
+                            Txn#transaction_mut.delete_set, Item#item.id, Item#item.len
+                        )
+                    },
+                    Txn3 =
+                        case Item#item.parent of
+                            undefined ->
+                                Txn2;
+                            {branch, Parent} ->
+                                transaction:add_changed_type(Txn, Parent, Item#item.parent_sub)
+                        end,
+                    Recurse =
+                        case Item#item.content of
+                            % TODO: suuport subdoc
+                            {type, Type} ->
+                                store:delete_branch(Store, Type),
+                                Start = Type#branch.start,
+                                Loop = fun Loop(Cur, Acc) ->
+                                    case Cur of
+                                        undefined ->
+                                            lists:reverse(Acc);
+                                        {ok, C} ->
+                                            Loop(C#item.right, [C#item.id | Acc])
+                                    end
+                                end,
+                                Loop(Start, []) ++ maps:values(Type#branch.map);
+                            % TODO: support move & subdocs
+                            _ ->
+                                []
+                        end,
+                    NewTxn = lists:foldl(
+                        fun(I, CurTxn) ->
+                            case store:get_item(Store, I) of
+                                {ok, Item} -> delete_item(CurTxn, Item);
+                                undefined -> CurTxn
+                            end
+                        end,
+                        Txn3,
+                        Recurse
+                    ),
+                    NewTxn
+            end
+    end.
+
+-spec delete_by_range(
+    transaction:transaction_mut(), block_store:client_block_list(), integer(), integer()
+) ->
+    [range:range()].
+delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
+    Store = Txn#transaction_mut.store,
     case block_store:find_pivot(Blocks, Clock) of
-        undefined -> [];
-        {ok, {Key, Item}} ->
-            
-
-
+        undefined ->
+            [];
+        {ok, {Key, {block, Item}}} ->
+            case item:is_deleted(Item) of
+                true ->
+                    delete_by_range(Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd);
+                false ->
+                    case Key < Clock of
+                        false ->
+                            delete_item(Txn, Item),
+                            delete_by_range(
+                                Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
+                            );
+                        true ->
+                            {ok, {NewItem1, NewItem2}} = item:splice(
+                                Store, Item, Clock - Item#item.id#id.clock
+                            ),
+                            delete_item(Txn, NewItem1),
+                            delete_by_range(
+                                Txn,
+                                Blocks,
+                                NewItem2#item.id#id.clock,
+                                ClockEnd
+                            )
+                    end
+            end;
+        _ ->
+            []
+    end.
 
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
 apply_delete(Txn, DeleteSet) ->
@@ -104,11 +204,11 @@ apply_delete(Txn, DeleteSet) ->
             case block_store:get_client(Store#store.blocks, ClientId) of
                 undefined ->
                     false;
-                Blocks ->
+                {ok, Blocks} ->
                     case
                         lists:flatmap(
                             fun(#range{start = Clock, end_ = ClockEnd}) ->
-                                delete_by_range(Blocks, Clock, ClockEnd)
+                                delete_by_range(Txn, Blocks, Clock, ClockEnd)
                             end,
                             Ranges
                         )

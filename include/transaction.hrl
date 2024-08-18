@@ -43,6 +43,7 @@
     store :: store:store(),
     before_state :: state_vector:state_vector(),
     after_state :: state_vector:state_vector(),
+    % TODO: support merge
     merge_blocks :: [id:id()],
     delete_set :: update:delete_set(),
     prev_moved :: #{id:id() => id:id()},
