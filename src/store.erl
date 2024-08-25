@@ -4,8 +4,7 @@
 
 -export_type([store/0]).
 
--include("../include/store.hrl").
--include("../include/item_slice.hrl").
+-include("../include/records.hrl").
 
 -type store() :: #store{}.
 
@@ -53,7 +52,7 @@ materialize(Store, Slice) ->
                 Slice;
             false ->
                 case item:splice(Store, Slice#item_slice.item, Slice#item_slice.start) of
-                    {ok, NewItem} ->
+                    {ok, {_, NewItem}} ->
                         #item_slice{
                             item = NewItem,
                             start = 0,
@@ -67,7 +66,7 @@ materialize(Store, Slice) ->
         case item_slice:adjacent_right(Slice1) of
             false ->
                 case item:splice(Store, Slice#item_slice.item, item_slice:len(Slice1)) of
-                    {ok, NewItem2} ->
+                    {ok, {NewItem2, _}} ->
                         #item_slice{
                             item = NewItem2,
                             start = 0,

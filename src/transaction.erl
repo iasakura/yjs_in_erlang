@@ -92,7 +92,7 @@ delete_item(Txn, Item) ->
     Store = Txn#transaction_mut.store,
     case item:is_deleted(Item) of
         true ->
-            ok;
+            Txn;
         false ->
             case option:is_none(Item#item.parent_sub) andalso item:is_countable(Item) of
                 false ->

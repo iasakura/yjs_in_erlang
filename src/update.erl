@@ -173,7 +173,14 @@ decode_update(Bin) ->
 -spec integrate(update(), transaction:transaction_mut()) ->
     {transaction:transaction_mut(), option:option(pending_update()), option:option(update())}.
 integrate(Update, Transaction) ->
-    throw("wip").
+    RemainingBlocks =
+        case Update#update.update_blocks of
+            #{} ->
+                undefined;
+            Blocks ->
+                CurrentBlockIds = lists:sort(maps:keys(Blocks)),
+                throw("wip: support")
+        end.
 
 -spec merge_update([update()]) -> update().
 merge_update(Updates) ->

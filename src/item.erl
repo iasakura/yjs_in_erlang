@@ -5,12 +5,8 @@
 
 -import(util, [get_item_from_link/2]).
 
--include("../include/item.hrl").
--include("../include/branch.hrl").
+-include("../include/records.hrl").
 -include("../include/constants.hrl").
--include("../include/transaction.hrl").
--include("../include/id.hrl").
--include("../include/store.hrl").
 
 -type item() :: #item{}.
 
