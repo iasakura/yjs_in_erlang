@@ -1,6 +1,6 @@
 -module(transaction).
 
--export([add_changed_type/3, apply_update/2]).
+-export([add_changed_type/3, apply_update/2, apply_delete/2]).
 -export_type([transaction_mut/0, subdocs/0]).
 
 -include("../include/records.hrl").
@@ -39,8 +39,10 @@ apply_update(Transaction, Update) ->
                         {ok, RemainingOk} ->
                             NewMissing = maps:fold(
                                 fun(Client, Clock, Acc) ->
-                                    maps:update_with(
-                                        Client, fun(C) -> min(C, Clock) end, Clock, Acc
+                                    state_vector:set_min(
+                                        Acc,
+                                        Client,
+                                        Clock
                                     )
                                 end,
                                 Pending#pending_update.missing,

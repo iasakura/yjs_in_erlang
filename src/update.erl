@@ -170,17 +170,252 @@ decode_update(Bin) ->
     {DeleteSet, Rest2} = id_set:decode_id_set(Rest1),
     {#update{update_blocks = Clients, delete_set = DeleteSet}, Rest2}.
 
+%
+% - ClientIdの小さいほうから順にBlockを適用していく。
+% - Blockを適用する際に、Blockが依存するBlockがLocalSVに存在しない場合は、そのBlockをUnappliedBlockStackに積む。
+% - その後依存先のBlockのClientIdのBlockを先に処理する (依存先のclockは考えずに小さいほうから処理すればよい)
+% - LocalSVがBlockをまだ受け入れられないならreturn_stackでMissingSV, Remainingを更新する
+% - 受け入れ可能かつ依存もすでに適用済みなら適用する
+-spec integrate_loop(
+    transaction:transaction_mut(),
+    update:update(),
+    item:item(),
+    block_store:block_store(),
+    state_vector:state_vector(),
+    state_vector:state_vector(),
+    update:update_blocks(),
+    [item:item()],
+    store:store()
+) -> option:option(update:update_blocks()).
+integrate_loop(
+    Txn, Update, CurBlock, CurTarget, LocalSV, MissingSV, Remaining, UnappliedBlockStack, Store
+) ->
+    case CurBlock of
+        undefined ->
+            case Remaining of
+                [] ->
+                    undefined;
+                {ok, _} ->
+                    {ok, #pending_update{
+                        update = #update{
+                            update_blocks = Remaining,
+                            delete_set = #{}
+                        },
+                        missing = MissingSV
+                    }}
+            end;
+        {ok, BlockCarrier} ->
+            case BlockCarrier of
+                {skip, _} ->
+                    ok;
+                {_, Block} ->
+                    Id = Block#item.id,
+                    case state_vector:contains(LocalSV, Id) of
+                        true ->
+                            Offset = maps:get(LocalSV, Id#id.client) - Id#id.clock,
+                            case missing(Block, LocalSV) of
+                                {ok, Dep} ->
+                                    NewStack = [Block | UnappliedBlockStack],
+                                    case maps:get(Dep, Update#update.update_blocks, undefined) of
+                                        undefined ->
+                                            NewMissingSV = state_vector:set_min(
+                                                MissingSV, Dep, maps:get(LocalSV, Dep, 0)
+                                            ),
+                                            {NewUpdateBlocks, NewRemaining} = return_stack(
+                                                UnappliedBlockStack,
+                                                Update#update.update_blocks,
+                                                Remaining
+                                            ),
+                                            NewUpdate = Update#update{update_blocks = NewUpdateBlocks},
+                                            NewStack = [],
+                                            {NewBlock, NewStack, NewTarget3, NewUpdate2} = next_update(
+                                                UnappliedBlockStack, NewUpdateBlocks, NewUpdate
+                                            ),
+                                            integrate_loop(
+                                                Txn,
+                                                NewUpdate2,
+                                                NewBlock,
+                                                NewTarget3,
+                                                LocalSV,
+                                                NewMissingSV,
+                                                NewRemaining,
+                                                NewStack,
+                                                Store
+                                            );
+                                        Blocks ->
+                                            % 次はdepのlistに状態遷移する
+                                            {NewCurBlock, NewClinetBlocks} =
+                                                case Blocks of
+                                                    [] -> {undefined, []};
+                                                    [B | Bs] -> {B, Bs}
+                                                end,
+                                            integrate_loop(
+                                                Txn,
+                                                Update#update{
+                                                    update_blocks = maps:put(
+                                                        Dep,
+                                                        NewClinetBlocks,
+                                                        Update#update.update_blocks
+                                                    )
+                                                },
+                                                NewCurBlock,
+                                                CurTarget,
+                                                LocalSV,
+                                                MissingSV,
+                                                Remaining,
+                                                NewStack,
+                                                Store
+                                            )
+                                    end;
+                                undefined when Offset =:= 0 orelse Offset < item:len(Block) ->
+                                    Client = Id#id.client,
+                                    NewLocalSV = state_vector:set_max(
+                                        LocalSV, Client, Id#id.clock + item:len(Block)
+                                    ),
+                                    case Block of
+                                        {item, Item} ->
+                                            store:repair(Item);
+                                        _ ->
+                                            ok
+                                    end,
+                                    ShouldDelete = item:integrate(Block, Txn, Offset),
+                                    DeleteItem =
+                                        case ShouldDelete of
+                                            true -> {ok, Block};
+                                            false -> undefined
+                                        end,
+                                    DeleteItem2 =
+                                        case Block of
+                                            {item, Item} ->
+                                                case Item#item.parent of
+                                                    {unknown} ->
+                                                        store:push_gc(#block_range{
+                                                            id = Id, len = item:len(Block)
+                                                        }),
+                                                        undefined;
+                                                    _ ->
+                                                        store:put_item(Store, Item),
+                                                        DeleteItem
+                                                end;
+                                            {gc, Gc} ->
+                                                store:push_gc(Gc),
+                                                DeleteItem;
+                                            {skip, _} ->
+                                                DeleteItem
+                                        end,
+                                    case DeleteItem2 of
+                                        {ok, B} ->
+                                            transaction:delete(B);
+                                        _ ->
+                                            ok
+                                    end,
+                                    {NewBlock, NewStack, NewTarget, NewUpdate2} = next_update(
+                                        UnappliedBlockStack, CurTarget, NewUpdate
+                                    ),
+                                    integrate_loop(
+                                        Txn,
+                                        NewUpdate2,
+                                        NewBlock,
+                                        NewTarget,
+                                        LocalSV,
+                                        NewMissingSV,
+                                        NewRemaining,
+                                        NewStack,
+                                        Store
+                                    )
+                            end;
+                        false ->
+                            Id = Block#item.id,
+                            NewMissingSV = state_vector:set_min(
+                                MissingSV, Id#id.client, Id#id.clock
+                            ),
+                            NewStack = [Block | UnappliedBlockStack],
+                            {CurTarget2, NewRemaining} = return_stack(
+                                NewStack, Update#update.update_blocks, Remaining
+                            ),
+                            NewStack2 = [],
+                            {NewBlock, NewStack3, NewTarget, NewUpdate} = next_update(
+                                NewStack2, CurTarget2, Update
+                            ),
+                            integrate_loop(
+                                Txn,
+                                NewUpdate,
+                                NewBlock,
+                                NewTarget,
+                                LocalSV,
+                                NewMissingSV,
+                                NewRemaining,
+                                NewStack3,
+                                Store
+                            )
+                    end
+            end
+    end.
+
+% Stack内の全itemの適用をあきらめて、UpdateBlocksの中のitemのClientIdの要素をすべてRemainingに移動する
+-spec return_stack(
+    [item:item()],
+    update_blocks(),
+    update_blocks()
+) -> {update_blocks(), update_blocks()}.
+return_stack(
+    Stack,
+    UpdateBlocks,
+    Remaining
+) ->
+    lists:foldl(
+        fun(Block, {AccUpdateBlocks, AccRemaining}) ->
+            Client = Block#item.id#id.client,
+            case maps:take(Client, AccUpdateBlocks) of
+                error ->
+                    {AccUpdateBlocks, maps:put(Client, [Block], AccRemaining)};
+                {Value, AccCurTarget2} ->
+                    {AccCurTarget2, maps:put(Client, [Block | Value], AccRemaining)}
+            end
+        end,
+        {UpdateBlocks, Remaining},
+        Stack
+    ).
+
 -spec integrate(update(), transaction:transaction_mut()) ->
     {transaction:transaction_mut(), option:option(pending_update()), option:option(update())}.
-integrate(Update, Transaction) ->
+integrate(Update, Txn) ->
     RemainingBlocks =
         case Update#update.update_blocks of
             #{} ->
                 undefined;
             Blocks ->
-                CurrentBlockIds = lists:sort(maps:keys(Blocks)),
-                throw("wip: support")
-        end.
+                [CurrentClientId | ClientBlockIds] = lists:sort(maps:keys(Blocks)),
+                {CurTarget, CurBlock} =
+                    case maps:get(Update#update.update_blocks, CurrentClientId, undefined) of
+                        undefined ->
+                            {undefined, undefined};
+                        U ->
+                            case U of
+                                {ok, [B | Rest]} -> {{ok, Rest}, {ok, B}};
+                                undefined -> {{ok, []}, undefined}
+                            end
+                    end,
+                integrate_loop(
+                    Txn,
+                    Update,
+                    CurBlock,
+                    CurTarget,
+                    store:get_state_vector(Txn#transaction_mut.store),
+                    state_vector:default(),
+                    #{},
+                    [],
+                    Txn#transaction_mut.store
+                )
+        end,
+    RemainingDs = option:map(
+        fun(Ds) -> #update{delete_set = Ds, update_blocks = #{}} end,
+        transaction:apply_update(Txn, Update#update.delete_set)
+    ),
+    {ok, {RemainingBlocks, RemainingDs}}.
+
+-spec missing(item:item(), state_vector:state_vector()) -> option:option(id:id()).
+missing(Item, LocalSV) -> undefined.
 
 -spec merge_update([update()]) -> update().
 merge_update(Updates) ->
