@@ -179,16 +179,26 @@ decode_update(Bin) ->
 -spec integrate_loop(
     transaction:transaction_mut(),
     update:update(),
-    item:item(),
-    block_store:block_store(),
+    option:option(update:block_carrier()),
+    [update:block_carrier()],
+    [integer()],
     state_vector:state_vector(),
     state_vector:state_vector(),
     update:update_blocks(),
-    [item:item()],
+    [update:block_carrier()],
     store:store()
-) -> option:option(update:update_blocks()).
+) -> option:option(update:pending_update()).
 integrate_loop(
-    Txn, Update, CurBlock, CurTarget, LocalSV, MissingSV, Remaining, UnappliedBlockStack, Store
+    Txn,
+    Update,
+    CurBlock,
+    CurTarget,
+    ClientBlockIds,
+    LocalSV,
+    MissingSV,
+    Remaining,
+    UnappliedBlockStack,
+    Store
 ) ->
     case CurBlock of
         undefined ->
@@ -204,19 +214,39 @@ integrate_loop(
                         missing = MissingSV
                     }}
             end;
-        {ok, BlockCarrier} ->
-            case BlockCarrier of
+        {ok, Block} ->
+            case Block of
                 {skip, _} ->
-                    ok;
-                {_, Block} ->
+                    {NewBlock, NewStack, NewTarget, ClientBlockIds, NewUpdate} = next(
+                        UnappliedBlockStack,
+                        CurTarget,
+                        ClientBlockIds,
+                        Update
+                    ),
+                    integrate_loop(
+                        Txn,
+                        NewUpdate,
+                        NewBlock,
+                        NewTarget,
+                        ClientBlockIds,
+                        LocalSV,
+                        MissingSV,
+                        Remaining,
+                        NewStack,
+                        Store
+                    );
+                _ ->
                     Id = Block#item.id,
                     case state_vector:contains(LocalSV, Id) of
                         true ->
                             Offset = maps:get(LocalSV, Id#id.client) - Id#id.clock,
                             case missing(Block, LocalSV) of
+                                % 未適用の依存がある場合
                                 {ok, Dep} ->
+                                    % いったんBlockはStackに積んで、Depの依存を処理する
                                     NewStack = [Block | UnappliedBlockStack],
                                     case maps:get(Dep, Update#update.update_blocks, undefined) of
+                                        % Update内にDepの依存がない場合, Remainingに退避する
                                         undefined ->
                                             NewMissingSV = state_vector:set_min(
                                                 MissingSV, Dep, maps:get(LocalSV, Dep, 0)
@@ -226,20 +256,27 @@ integrate_loop(
                                                 Update#update.update_blocks,
                                                 Remaining
                                             ),
-                                            NewUpdate = Update#update{update_blocks = NewUpdateBlocks},
-                                            NewStack = [],
-                                            {NewBlock, NewStack, NewTarget3, NewUpdate2} = next_update(
-                                                UnappliedBlockStack, NewUpdateBlocks, NewUpdate
+                                            NewUpdate = Update#update{
+                                                update_blocks = NewUpdateBlocks
+                                            },
+                                            NewStack2 = [],
+                                            {NewBlock, NewStack3, NewTarget, NewClientBlockIds,
+                                                NewUpdate2} = next(
+                                                NewStack2,
+                                                CurTarget,
+                                                ClientBlockIds,
+                                                NewUpdate
                                             ),
                                             integrate_loop(
                                                 Txn,
                                                 NewUpdate2,
                                                 NewBlock,
-                                                NewTarget3,
+                                                NewTarget,
+                                                NewClientBlockIds,
                                                 LocalSV,
                                                 NewMissingSV,
                                                 NewRemaining,
-                                                NewStack,
+                                                NewStack3,
                                                 Store
                                             );
                                         Blocks ->
@@ -247,7 +284,7 @@ integrate_loop(
                                             {NewCurBlock, NewClinetBlocks} =
                                                 case Blocks of
                                                     [] -> {undefined, []};
-                                                    [B | Bs] -> {B, Bs}
+                                                    [B | Bs] -> {{ok, B}, Bs}
                                                 end,
                                             integrate_loop(
                                                 Txn,
@@ -260,6 +297,7 @@ integrate_loop(
                                                 },
                                                 NewCurBlock,
                                                 CurTarget,
+                                                ClientBlockIds,
                                                 LocalSV,
                                                 MissingSV,
                                                 Remaining,
@@ -267,62 +305,95 @@ integrate_loop(
                                                 Store
                                             )
                                     end;
-                                undefined when Offset =:= 0 orelse Offset < item:len(Block) ->
-                                    Client = Id#id.client,
-                                    NewLocalSV = state_vector:set_max(
-                                        LocalSV, Client, Id#id.clock + item:len(Block)
-                                    ),
-                                    case Block of
-                                        {item, Item} ->
-                                            store:repair(Item);
-                                        _ ->
-                                            ok
-                                    end,
-                                    ShouldDelete = item:integrate(Block, Txn, Offset),
-                                    DeleteItem =
-                                        case ShouldDelete of
-                                            true -> {ok, Block};
-                                            false -> undefined
-                                        end,
-                                    DeleteItem2 =
-                                        case Block of
-                                            {item, Item} ->
-                                                case Item#item.parent of
-                                                    {unknown} ->
-                                                        store:push_gc(#block_range{
-                                                            id = Id, len = item:len(Block)
-                                                        }),
-                                                        undefined;
-                                                    _ ->
-                                                        store:put_item(Store, Item),
+                                undefined ->
+                                    % 未適用でかつ適用可能
+                                    case Offset =:= 0 orelse Offset < block_carrier_length(Block) of
+                                        false ->
+                                            {NewBlock, NewStack, NewTarget, ClientBlockIds,
+                                                NewUpdate} = next(
+                                                UnappliedBlockStack,
+                                                CurTarget,
+                                                ClientBlockIds,
+                                                Update
+                                            ),
+                                            integrate_loop(
+                                                Txn,
+                                                NewUpdate,
+                                                NewBlock,
+                                                NewTarget,
+                                                ClientBlockIds,
+                                                LocalSV,
+                                                MissingSV,
+                                                Remaining,
+                                                NewStack,
+                                                Store
+                                            );
+                                        true ->
+                                            Client = Id#id.client,
+                                            NewLocalSV = state_vector:set_max(
+                                                LocalSV,
+                                                Client,
+                                                Id#id.clock + block_carrier_length(Block)
+                                            ),
+                                            case Block of
+                                                {item, Item} ->
+                                                    store:repair(Item);
+                                                _ ->
+                                                    ok
+                                            end,
+                                            ShouldDelete = item:integrate(Block, Txn, Offset),
+                                            DeleteItem =
+                                                case ShouldDelete of
+                                                    true -> {ok, Block};
+                                                    false -> undefined
+                                                end,
+                                            DeleteItem2 =
+                                                case Block of
+                                                    {item, Item2} ->
+                                                        case Item2#item.parent of
+                                                            {unknown} ->
+                                                                store:push_gc(#block_range{
+                                                                    id = Id,
+                                                                    len = block_carrier_length(
+                                                                        Block
+                                                                    )
+                                                                }),
+                                                                undefined;
+                                                            _ ->
+                                                                store:put_item(Store, Item2),
+                                                                DeleteItem
+                                                        end;
+                                                    {gc, Gc} ->
+                                                        store:push_gc(Gc),
+                                                        DeleteItem;
+                                                    {skip, _} ->
                                                         DeleteItem
-                                                end;
-                                            {gc, Gc} ->
-                                                store:push_gc(Gc),
-                                                DeleteItem;
-                                            {skip, _} ->
-                                                DeleteItem
-                                        end,
-                                    case DeleteItem2 of
-                                        {ok, B} ->
-                                            transaction:delete(B);
-                                        _ ->
-                                            ok
-                                    end,
-                                    {NewBlock, NewStack, NewTarget, NewUpdate2} = next_update(
-                                        UnappliedBlockStack, CurTarget, NewUpdate
-                                    ),
-                                    integrate_loop(
-                                        Txn,
-                                        NewUpdate2,
-                                        NewBlock,
-                                        NewTarget,
-                                        LocalSV,
-                                        NewMissingSV,
-                                        NewRemaining,
-                                        NewStack,
-                                        Store
-                                    )
+                                                end,
+                                            case DeleteItem2 of
+                                                {ok, B} ->
+                                                    transaction:delete(B);
+                                                _ ->
+                                                    ok
+                                            end,
+                                            {NewBlock, NewStack, NewTarget, NewUpdate2} = next(
+                                                UnappliedBlockStack,
+                                                CurTarget,
+                                                ClientBlockIds,
+                                                Update
+                                            ),
+                                            integrate_loop(
+                                                Txn,
+                                                NewUpdate2,
+                                                NewBlock,
+                                                NewTarget,
+                                                ClientBlockIds,
+                                                NewLocalSV,
+                                                MissingSV,
+                                                Remaining,
+                                                NewStack,
+                                                Store
+                                            )
+                                    end
                             end;
                         false ->
                             Id = Block#item.id,
@@ -330,18 +401,22 @@ integrate_loop(
                                 MissingSV, Id#id.client, Id#id.clock
                             ),
                             NewStack = [Block | UnappliedBlockStack],
-                            {CurTarget2, NewRemaining} = return_stack(
+                            {NewUpdateBlocks, NewRemaining} = return_stack(
                                 NewStack, Update#update.update_blocks, Remaining
                             ),
+                            NewUpdate = Update#update{
+                                update_blocks = NewUpdateBlocks
+                            },
                             NewStack2 = [],
-                            {NewBlock, NewStack3, NewTarget, NewUpdate} = next_update(
-                                NewStack2, CurTarget2, Update
+                            {NewBlock, NewStack3, NewTarget, NewUpdate2} = next(
+                                NewStack2, CurTarget, ClientBlockIds, NewUpdate
                             ),
                             integrate_loop(
                                 Txn,
-                                NewUpdate,
+                                NewUpdate2,
                                 NewBlock,
                                 NewTarget,
+                                ClientBlockIds,
                                 LocalSV,
                                 NewMissingSV,
                                 NewRemaining,
@@ -352,9 +427,55 @@ integrate_loop(
             end
     end.
 
+-spec next(
+    [update:block_carrier()],
+    [update:block_carrier()],
+    [integer()],
+    update()
+) ->
+    {
+        option:option(update:block_carrier()),
+        [update:block_carrier()],
+        [update:block_carrier()],
+        [integer()],
+        update()
+    }.
+next(UnappliedBlockStack, CurTarget, ClientBlockIds, Update) ->
+    case UnappliedBlockStack of
+        [Head | Rest] ->
+            {{ok, Head}, Rest, CurTarget, ClientBlockIds, Update};
+        [] ->
+            case CurTarget of
+                [Head | Rest] ->
+                    {{ok, Head}, [], Rest, ClientBlockIds, Update};
+                [] ->
+                    case next_target(ClientBlockIds, Update) of
+                        {found, {_, [Head | Rest]}, NewClientBlockIds, NewUpdate} ->
+                            {{ok, Head}, [], Rest, NewClientBlockIds, NewUpdate};
+                        {not_found, {NewClientBlockIds, NewUpdate}} ->
+                            {undefined, [], [], NewClientBlockIds, NewUpdate}
+                    end
+            end
+    end.
+
+-spec next_target([integer()], update()) ->
+    {found, {integer(), [update:block_carrier()]}, [integer()], update()}
+    | {not_found, {[integer()], update()}}.
+next_target([], Update) ->
+    {not_found, {[], Update}};
+next_target([Id | ClientBlockIds], Update) ->
+    case maps:get(Id, Update#update.update_blocks, undefined) of
+        undefined ->
+            next_target(ClientBlockIds, Update);
+        [] ->
+            next_target(ClientBlockIds, Update);
+        Blocks = [_ | _] ->
+            {found, {Id, Blocks}, ClientBlockIds, Update}
+    end.
+
 % Stack内の全itemの適用をあきらめて、UpdateBlocksの中のitemのClientIdの要素をすべてRemainingに移動する
 -spec return_stack(
-    [item:item()],
+    [block_carrier()],
     update_blocks(),
     update_blocks()
 ) -> {update_blocks(), update_blocks()}.
@@ -387,13 +508,13 @@ integrate(Update, Txn) ->
             Blocks ->
                 [CurrentClientId | ClientBlockIds] = lists:sort(maps:keys(Blocks)),
                 {CurTarget, CurBlock} =
-                    case maps:get(Update#update.update_blocks, CurrentClientId, undefined) of
+                    case maps:get(CurrentClientId, Update#update.update_blocks, undefined) of
                         undefined ->
-                            {undefined, undefined};
+                            {[], undefined};
                         U ->
                             case U of
-                                {ok, [B | Rest]} -> {{ok, Rest}, {ok, B}};
-                                undefined -> {{ok, []}, undefined}
+                                [B | Rest] -> {Rest, {ok, B}};
+                                [] -> {[], undefined}
                             end
                     end,
                 integrate_loop(
@@ -401,6 +522,7 @@ integrate(Update, Txn) ->
                     Update,
                     CurBlock,
                     CurTarget,
+                    ClientBlockIds,
                     store:get_state_vector(Txn#transaction_mut.store),
                     state_vector:default(),
                     #{},
@@ -414,7 +536,8 @@ integrate(Update, Txn) ->
     ),
     {ok, {RemainingBlocks, RemainingDs}}.
 
--spec missing(item:item(), state_vector:state_vector()) -> option:option(id:id()).
+-spec missing(block_carrier(), state_vector:state_vector()) ->
+    option:option(state_vector:client_id()).
 missing(Item, LocalSV) -> undefined.
 
 -spec merge_update([update()]) -> update().
