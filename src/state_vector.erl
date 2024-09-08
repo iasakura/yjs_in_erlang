@@ -3,10 +3,15 @@
 -include("../include/records.hrl").
 
 -export_type([client_id/0, state_vector/0]).
--export([encode_state_vector/1, decode_state_vector/1, set_min/3, set_max/3, get/2, contains/2]).
+-export([
+    new/0, encode_state_vector/1, decode_state_vector/1, set_min/3, set_max/3, get/2, contains/2
+]).
 
 -type client_id() :: integer().
 -type state_vector() :: #{client_id() => integer()}.
+
+-spec new() -> state_vector().
+new() -> #{}.
 
 -spec encode_state_vector(state_vector()) -> binary().
 encode_state_vector(SV) ->

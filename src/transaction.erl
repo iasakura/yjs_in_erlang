@@ -1,6 +1,6 @@
 -module(transaction).
 
--export([add_changed_type/3, apply_update/2, apply_delete/2]).
+-export([new/1, add_changed_type/3, apply_update/2, apply_delete/2]).
 -export_type([transaction_mut/0, subdocs/0]).
 
 -include("../include/records.hrl").
@@ -8,7 +8,41 @@
 
 -type subdocs() :: #subdocs{}.
 
--type transaction_mut() :: #transaction_mut{}.
+-opaque transaction_mut() :: pid().
+
+-type transaction_mut_state() :: #transaction_mut{}.
+
+-spec new(doc:doc()) -> transaction_mut().
+new(Doc) ->
+    spawn(fun() -> transaction_loop(new_state(Doc)) end).
+
+-spec new_state(doc:doc()) -> transaction_mut_state().
+new_state(Doc) ->
+    #transaction_mut{
+        store = Doc#doc.store,
+        before_state = block_store:get_state_vector(Doc#doc.store#store.blocks),
+        after_state = state_vector:new(),
+        merge_blocks = [],
+        delete_set = id_set:new(),
+        prev_moved = #{},
+        changed = #{},
+        changed_parent_types = [],
+        subdocs = undefined,
+        doc = Doc,
+        committed = false
+    }.
+
+% wip: implement operations
+-spec transaction_loop(transaction_mut_state()) -> no_return().
+transaction_loop(State) ->
+    receive
+        {apply_update, Txn, Update} ->
+            Txn = apply_update(Txn, Update),
+            transaction_loop();
+        {apply_delete, Txn, DeleteSet} ->
+            apply_delete(Txn, DeleteSet),
+            transaction_loop()
+    end.
 
 -spec apply_update(transaction_mut(), update:update()) -> transaction_mut().
 apply_update(Transaction, Update) ->

@@ -14,7 +14,7 @@
     % | {json, [json()]}
     % {embed, any_type()} |
     % | {format, string(), any_type()}
-    % wip: correct?
+    % wip: base16 encode
     | {string, binary()}
     | {type, branch:branch()}.
 % | {move, move()}.
@@ -30,7 +30,7 @@ countable({any, _}) -> true.
 len({delete, D}) -> D;
 % only supports OffsetKind:Bytes
 len({string, S}) -> byte_size(S);
-% WIP: any / json
+% todo: any / json
 len(_) -> 1.
 
 -spec decode(binary(), integer()) -> {item_content(), binary()}.

@@ -1,4 +1,3 @@
-% WIP
 -record(branch, {
     start :: option:option(id:id()),
     map :: #{binary() => id:id()},
@@ -7,6 +6,7 @@
     block_len :: integer(),
     content_len :: integer(),
     type_ref :: type_ref:type_ref()
+    % TODO: observers
     % observers
     % deep_observers
 }).

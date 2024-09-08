@@ -1,6 +1,6 @@
 -module(store).
 
--export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2, delete_branch/2]).
+-export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2, delete_branch/2, get_state_vector/1]).
 
 -export_type([store/0]).
 
@@ -79,3 +79,7 @@ materialize(Store, Slice) ->
                 Slice1
         end,
     Slice2#item_slice.item.
+
+-spec get_state_vector(store()) -> state_vector:state_vector().
+get_state_vector(Store) ->
+    block_store:get_state_vector(Store#store.blocks).

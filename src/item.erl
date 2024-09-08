@@ -102,7 +102,6 @@ integrate(Item, Txn, Offset) ->
     Store = Txn#transaction_mut.store,
     Item0 =
         case Offset > 0 of
-            % WIP
             true ->
                 begin
                     NewItem = Item#item{
@@ -173,11 +172,10 @@ integrate(Item, Txn, Offset) ->
             Item2 = tweak_parent_sub(Store, Item1),
             reconnect_left_right(Store, Parent, Item2),
             adjust_length_of_parent(Store, Parent, Item2),
-            % WIP: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
-
+            % todo: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
             integrate_content(Txn, Item2),
             transaction:add_changed_type(Txn, Parent, Item2#item.parent_sub),
-            % WIP: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
+            % todo: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
             check_deleted(Store, Parent, Item2);
         _ ->
             false
@@ -368,7 +366,7 @@ reconnect_left_right(Store, Parent, This) ->
                     ),
                     case get_item_from_link(Store, This#item.left) of
                         {ok, _Left2} ->
-                            % WIP: support `weak` feature
+                            % todo: support `weak` feature
                             % WIP: txn.delete(Left)
                             true;
                         _ ->
@@ -412,7 +410,7 @@ adjust_length_of_parent(Store, Parent, This) ->
                     }),
                     true;
                 _ ->
-                    % WIP: support `weak` feature
+                    % todo: support `weak` feature
                     true
             end;
         _ ->
@@ -428,8 +426,8 @@ integrate_content(TransactionMut, Item) ->
             id_set:insert(TransactionMut#transaction_mut.delete_set, Item#item.id, Len),
             store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED}),
             true;
-        % wip: { type, Move }
-        % wip: { type, Doc }
+        % todo: { type, Move }
+        % todo: { type, Doc }
         {format, _} ->
             true;
         {type, Branch} ->

@@ -40,6 +40,16 @@ block_carrier_length({item, Item}) -> item:len(Item);
 block_carrier_length({gc, Range}) -> Range#block_range.len;
 block_carrier_length({skip, Range}) -> Range#block_range.len.
 
+-spec bc_id(block_carrier()) -> id:id().
+bc_id({item, Item}) -> Item#item.id;
+bc_id({gc, Range}) -> Range#block_range.id;
+bc_id({skip, Range}) -> Range#block_range.id.
+
+-spec bc_integrate(block_carrier(), transaction:transaction_mut(), integer()) -> boolean().
+bc_integrate({item, Item}, Txn, Offset) -> item:integrate(Item, Txn, Offset);
+bc_integrate({gc, _Range}, _Txn, _Offset) -> throw("wip: range.integrate");
+bc_integrate({skip, _Range}, _Txn, _Offset) -> throw("wip: range.integrate").
+
 % -spec encode_ranges(ranges()) -> binary().
 % encode_ranges(Ranges) ->
 %     L = length(Ranges),
@@ -236,10 +246,10 @@ integrate_loop(
                         Store
                     );
                 _ ->
-                    Id = Block#item.id,
+                    Id = bc_id(Block),
                     case state_vector:contains(LocalSV, Id) of
                         true ->
-                            Offset = maps:get(LocalSV, Id#id.client) - Id#id.clock,
+                            Offset = maps:get(Id#id.client, LocalSV) - Id#id.clock,
                             case missing(Block, LocalSV) of
                                 % 未適用の依存がある場合
                                 {ok, Dep} ->
@@ -249,7 +259,7 @@ integrate_loop(
                                         % Update内にDepの依存がない場合, Remainingに退避する
                                         undefined ->
                                             NewMissingSV = state_vector:set_min(
-                                                MissingSV, Dep, maps:get(LocalSV, Dep, 0)
+                                                MissingSV, Dep, maps:get(Dep, LocalSV, 0)
                                             ),
                                             {NewUpdateBlocks, NewRemaining} = return_stack(
                                                 UnappliedBlockStack,
@@ -341,7 +351,7 @@ integrate_loop(
                                                 _ ->
                                                     ok
                                             end,
-                                            ShouldDelete = item:integrate(Block, Txn, Offset),
+                                            ShouldDelete = bc_integrate(Block, Txn, Offset),
                                             DeleteItem =
                                                 case ShouldDelete of
                                                     true -> {ok, Block};
@@ -396,7 +406,7 @@ integrate_loop(
                                     end
                             end;
                         false ->
-                            Id = Block#item.id,
+                            Id = bc_id(Block),
                             NewMissingSV = state_vector:set_min(
                                 MissingSV, Id#id.client, Id#id.clock
                             ),
@@ -486,7 +496,7 @@ return_stack(
 ) ->
     lists:foldl(
         fun(Block, {AccUpdateBlocks, AccRemaining}) ->
-            Client = Block#item.id#id.client,
+            Client = (bc_id(Block))#id.client,
             case maps:take(Client, AccUpdateBlocks) of
                 error ->
                     {AccUpdateBlocks, maps:put(Client, [Block], AccRemaining)};
@@ -524,7 +534,7 @@ integrate(Update, Txn) ->
                     CurTarget,
                     ClientBlockIds,
                     store:get_state_vector(Txn#transaction_mut.store),
-                    state_vector:default(),
+                    state_vector:new(),
                     #{},
                     [],
                     Txn#transaction_mut.store
@@ -538,7 +548,7 @@ integrate(Update, Txn) ->
 
 -spec missing(block_carrier(), state_vector:state_vector()) ->
     option:option(state_vector:client_id()).
-missing(Item, LocalSV) -> undefined.
+missing(Item, LocalSV) -> throw("wip").
 
 -spec merge_update([update()]) -> update().
 merge_update(Updates) ->

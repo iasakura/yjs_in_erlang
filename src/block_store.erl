@@ -1,12 +1,11 @@
 -module(block_store).
 
--export([new/0, put_item/2, get/2, get_item_clean_end/2, get_clock/2, get_client/2, find_pivot/2]).
+-export([new/0, put_item/2, get/2, get_item_clean_end/2, get_clock/2, get_client/2, find_pivot/2, get_state_vector/1]).
 -export_type([block_store/0, client_block_list/0]).
 
 -include("../include/records.hrl").
 
 -opaque block_store() :: ets:table().
-% -type client_block_list() :: #client_block_list{}.
 -opaque client_block_list() :: ets:table().
 
 -spec new() -> block_store().
@@ -72,7 +71,11 @@ get_item_clean_end(Store, Id) ->
 -spec get_clock(block_store(), state_vector:client_id()) -> integer().
 get_clock(BlockStore, Client) ->
     case ets:lookup(BlockStore, Client) of
-        [{_, Table}] -> ets:foldl(fun(Item, Acc) -> max(Item#item.id#id.clock, Acc) end, 0, Table)
+        [{_, Table}] ->
+            case ets:last(Table) of
+                '$end_of_table' -> 0;
+                Key -> Key
+            end
     end.
 
 -spec find_pivot(client_block_list(), integer()) -> option:option({integer(), block:block_cell()}).
@@ -87,3 +90,18 @@ find_pivot(Table, Clock) ->
         _ ->
             undefined
     end.
+
+-spec get_state_vector(block_store()) -> state_vector:state_vector().
+get_state_vector(BlockStore) ->
+    ets:foldl(
+        fun({ClientId, Table}, Acc) ->
+            Clock =
+                case ets:last(Table) of
+                    '$end_of_table' -> 0;
+                    Key -> Key
+                end,
+            maps:put(ClientId, Clock, Acc)
+        end,
+        state_vector:new(),
+        BlockStore
+    ).
