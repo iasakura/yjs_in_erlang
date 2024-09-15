@@ -3,6 +3,8 @@
 -export([decode_sync_message/1]).
 -export_type([sync_messages/0]).
 
+-include("../include/records.hrl").
+
 -type sync_messages() ::
     {sync_step1, state_vector:state_vector()}
     | {sync_step2, update:update()}

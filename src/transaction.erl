@@ -1,10 +1,18 @@
 -module(transaction).
 
--export([new/1, add_changed_type/3, apply_update/2, apply_delete/2]).
+-export([
+    new/1,
+    add_changed_type/3,
+    apply_update/2,
+    apply_delete/2,
+    get_store/1,
+    get_delete_set/1,
+    delete/2
+]).
 -export_type([transaction_mut/0, subdocs/0]).
 
--include("../include/records.hrl").
 -include("../include/constants.hrl").
+-include("../include/records.hrl").
 
 -type subdocs() :: #subdocs{}.
 
@@ -36,18 +44,68 @@ new_state(Doc) ->
 -spec transaction_loop(transaction_mut_state()) -> no_return().
 transaction_loop(State) ->
     receive
-        {apply_update, Txn, Update} ->
-            Txn = apply_update(Txn, Update),
-            transaction_loop();
-        {apply_delete, Txn, DeleteSet} ->
-            apply_delete(Txn, DeleteSet),
-            transaction_loop()
+        {Pid, apply_delete, Txn, DeleteSet} ->
+            {DeleteSet, NewState} = internal_apply_delete(State, DeleteSet),
+            Pid ! {Txn, DeleteSet},
+            transaction_loop(NewState);
+        {Pid, add_changed_type, Txn, Parent, ParentSub} ->
+            NewState = internal_add_changed_type(State, Parent, ParentSub),
+            Pid ! {Txn, ok},
+            transaction_loop(NewState);
+        {Pid, get_store} ->
+            Pid ! {self(), State#transaction_mut.store},
+            transaction_loop(State);
+        {Pid, get_delete_set} ->
+            Pid ! {self(), State#transaction_mut.delete_set},
+            transaction_loop(State);
+        {Pid, set_store, NewStore} ->
+            Pid ! {self(), ok},
+            transaction_loop(State#transaction_mut{store = NewStore})
     end.
 
--spec apply_update(transaction_mut(), update:update()) -> transaction_mut().
-apply_update(Transaction, Update) ->
-    {Txn, Remaining, RemainingDs} = update:integrate(Update, Transaction),
-    Store = Transaction#transaction_mut.store,
+-spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
+apply_delete(Txn, DeleteSet) ->
+    Txn ! {self(), apply_delete, Txn, DeleteSet},
+    receive
+        {Txn, DeleteSet} -> DeleteSet
+    end.
+
+-spec add_changed_type(transaction_mut(), branch:branch(), option:option(binary())) -> ok.
+add_changed_type(Txn, Parent, ParentSub) ->
+    Txn ! {self(), add_changed_type, Txn, Parent, ParentSub},
+    receive
+        {Txn, ok} -> ok
+    end.
+
+-spec get_store(transaction_mut()) -> store:store().
+get_store(Txn) ->
+    Txn ! {self(), get_store},
+    receive
+        {Txn, Store} -> Store
+    end.
+-spec set_store(transaction_mut(), store:store()) -> ok.
+set_store(Txn, Store) ->
+    Txn ! {self(), set_store, Store},
+    receive
+        {Txn, ok} -> ok
+    end.
+
+-spec get_delete_set(transaction_mut()) -> update:delete_set().
+get_delete_set(Txn) ->
+    Txn ! {self(), get_delete_set},
+    receive
+        {Txn, DeleteSet} -> DeleteSet
+    end.
+
+-spec delete(transaction_mut(), item:item()) -> ok.
+delete(Txn, Item) ->
+    throw("wip"),
+    ok.
+
+-spec apply_update(transaction_mut(), update:update()) -> ok.
+apply_update(Txn, Update) ->
+    {Remaining, RemainingDs} = update:integrate(Update, Txn),
+    Store = get_store(Txn),
 
     % storeのpendingの計算
     NewPending =
@@ -57,6 +115,7 @@ apply_update(Transaction, Update) ->
                 Remaining;
             {ok, Pending} ->
                 case
+                    % Storeのclockがpendingよりも進んでいるなら再適用してみる。
                     maps:find(
                         fun(Client, Clock) ->
                             Clock < block_store:get_clock(Store#store.blocks, Client)
@@ -64,8 +123,8 @@ apply_update(Transaction, Update) ->
                         Pending#pending_update.missing
                     )
                 of
-                    {ok, _} -> Retry = false;
-                    _ -> Retry = true
+                    {ok, _} -> Retry = true;
+                    _ -> Retry = false
                 end,
 
                 NewPending0 =
@@ -95,6 +154,7 @@ apply_update(Transaction, Update) ->
     NewPendingDs =
         case Store#store.pending_ds of
             undefined ->
+                % eqwalizer:ignore: Unbound rec: update
                 option:map(fun(U) -> U#update.delete_set end, RemainingDs);
             {ok, PendingDs} ->
                 Ds2 = apply_delete(Txn, PendingDs),
@@ -102,28 +162,37 @@ apply_update(Transaction, Update) ->
                     {undefined, undefined} -> undefined;
                     {undefined, Ds} -> {ok, Ds};
                     {Ds, undefined} -> {ok, Ds};
+                    % eqwalizer:ignore: Unbound rec: update
                     {{ok, Ds1}, {ok, Ds2}} -> {ok, id_set:merge_id_set(Ds1#update.delete_set, Ds2)}
                 end
         end,
+
+    set_store(Txn, Store#store{pending = NewPending, pending_ds = NewPendingDs}),
 
     case Retry of
         false ->
             ok;
         true ->
-            NewStore = Store#store{pending = NewPending, pending_ds = NewPendingDs},
-            PendingDs2 =
-                case NewStore#store.pending_ds of
-                    undefined -> id_set:new();
-                    {ok, P} -> P
-                end,
-            DsUpdate = #update{delete_set = PendingDs2, update_blocks = []},
-            apply_update(Transaction, NewPending#pending_update.update),
-            apply_update(Transaction, DsUpdate)
-    end,
+            case NewPending of
+                {ok, NewPendingOk} ->
+                    NewStore = Store#store{pending = NewPending, pending_ds = NewPendingDs},
+                    PendingDs2 =
+                        case NewStore#store.pending_ds of
+                            undefined -> id_set:new();
+                            {ok, P} -> P
+                        end,
+                    % eqwalizer:ignore: Unbound rec: update
+                    DsUpdate = #update{delete_set = PendingDs2, update_blocks = []},
+                    ok = apply_update(Txn, NewPendingOk#pending_update.update),
+                    ok = apply_update(Txn, DsUpdate),
+                    ok;
+                undefined ->
+                    ok
+            end
+    end.
 
-    Transaction.
-
--spec delete_item(transaction:transaction_mut(), item:item()) -> transaction:transaction_mut().
+-spec delete_item(transaction:transaction_mut_state(), item:item()) ->
+    transaction:transaction_mut_state().
 delete_item(Txn, Item) ->
     Store = Txn#transaction_mut.store,
     case item:is_deleted(Item) of
@@ -159,7 +228,9 @@ delete_item(Txn, Item) ->
                             undefined ->
                                 Txn2;
                             {branch, Parent} ->
-                                transaction:add_changed_type(Txn, Parent, Item#item.parent_sub)
+                                transaction:internal_add_changed_type(
+                                    Txn, Parent, Item#item.parent_sub
+                                )
                         end,
                     Recurse =
                         case Item#item.content of
@@ -195,32 +266,36 @@ delete_item(Txn, Item) ->
     end.
 
 -spec delete_by_range(
-    transaction:transaction_mut(), block_store:client_block_list(), integer(), integer()
+    transaction:transaction_mut_state(), block_store:client_block_list(), integer(), integer()
 ) ->
     [range:range()].
 delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
     Store = Txn#transaction_mut.store,
+    %  TODO: use lookup
     case block_store:find_pivot(Blocks, Clock) of
         undefined ->
-            [];
-        {ok, {Key, {block, Item}}} ->
+            [#range{start = Clock, end_ = ClockEnd}];
+        {ok, {_, {block, Item}}} ->
             case item:is_deleted(Item) of
                 true ->
                     delete_by_range(Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd);
                 false ->
-                    case Key < Clock of
+                    case Item#item.id#id.clock + item:len(Item) > ClockEnd of
                         false ->
-                            delete_item(Txn, Item),
+                            NewTxn = delete_item(Txn, Item),
                             delete_by_range(
-                                Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
+                                NewTxn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
                             );
                         true ->
                             {ok, {NewItem1, NewItem2}} = item:splice(
                                 Store, Item, Clock - Item#item.id#id.clock
                             ),
-                            delete_item(Txn, NewItem1),
+                            NewTxn0 = Txn#transaction_mut{
+                                merge_blocks = [NewItem1#item.id | Txn#transaction_mut.merge_blocks]
+                            },
+                            NewTxn1 = delete_item(NewTxn0, NewItem1),
                             delete_by_range(
-                                Txn,
+                                NewTxn1,
                                 Blocks,
                                 NewItem2#item.id#id.clock,
                                 ClockEnd
@@ -231,9 +306,9 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
             []
     end.
 
--spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
-apply_delete(Txn, DeleteSet) ->
-    Store = Txn#transaction_mut.store,
+-spec internal_apply_delete(transaction_mut_state(), update:delete_set()) -> update:delete_set().
+internal_apply_delete(State, DeleteSet) ->
+    Store = State#transaction_mut.store,
     maps:filtermap(
         fun(ClientId, Range) ->
             Ranges = id_set:id_range_to_list(Range),
@@ -244,7 +319,7 @@ apply_delete(Txn, DeleteSet) ->
                     case
                         lists:flatmap(
                             fun(#range{start = Clock, end_ = ClockEnd}) ->
-                                delete_by_range(Txn, Blocks, Clock, ClockEnd)
+                                delete_by_range(State, Blocks, Clock, ClockEnd)
                             end,
                             Ranges
                         )
@@ -258,9 +333,9 @@ apply_delete(Txn, DeleteSet) ->
         DeleteSet
     ).
 
--spec add_changed_type(transaction_mut(), branch:branch(), option:option(binary())) ->
-    transaction_mut().
-add_changed_type(Txn, Parent, ParentSub) ->
+-spec internal_add_changed_type(transaction_mut_state(), branch:branch(), option:option(binary())) ->
+    transaction_mut_state().
+internal_add_changed_type(Txn, Parent, ParentSub) ->
     Trigger =
         case util:get_item_from_link(Txn#transaction_mut.store, Parent#branch.item) of
             {ok, Item} ->

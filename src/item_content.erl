@@ -27,7 +27,7 @@ countable({type, _}) -> true;
 countable({any, _}) -> true.
 
 -spec len(item_content()) -> integer().
-len({delete, D}) -> D;
+len({deleted, D}) -> D;
 % only supports OffsetKind:Bytes
 len({string, S}) -> byte_size(S);
 % todo: any / json

@@ -1,6 +1,15 @@
 -module(block_store).
 
--export([new/0, put_item/2, get/2, get_item_clean_end/2, get_clock/2, get_client/2, find_pivot/2, get_state_vector/1]).
+-export([
+    new/0,
+    put_item/2,
+    get/2,
+    get_item_clean_end/2,
+    get_clock/2,
+    get_client/2,
+    find_pivot/2,
+    get_state_vector/1
+]).
 -export_type([block_store/0, client_block_list/0]).
 
 -include("../include/records.hrl").
@@ -80,12 +89,18 @@ get_clock(BlockStore, Client) ->
 
 -spec find_pivot(client_block_list(), integer()) -> option:option({integer(), block:block_cell()}).
 find_pivot(Table, Clock) ->
-    case ets:next(Table, {Clock - 1}) of
+    case ets:prev(Table, {Clock + 1}) of
         Key when is_integer(Key) ->
             case ets:lookup(Table, Key) of
-                [] -> throw("unreachable");
-                [#client_block{start = Start, cell = Block}] -> {ok, {Start, Block}};
-                _ -> throw("y_erl invariant is broken: more than one item has the same clock")
+                [] ->
+                    throw("unreachable");
+                [#client_block{cell = Block}] ->
+                    case block:id_range(Block) of
+                        {Start, Len} when Start =< Clock, Clock < Start + Len ->
+                            {ok, {Start, Block}};
+                        _ ->
+                            undefined
+                    end
             end;
         _ ->
             undefined

@@ -1,6 +1,15 @@
 -module(store).
 
--export([new/0, get_item/2, put_item/2, put_branch/2, materialize/2, delete_branch/2, get_state_vector/1]).
+-export([
+    new/0,
+    get_item/2,
+    put_item/2,
+    put_branch/2,
+    materialize/2,
+    delete_branch/2,
+    get_state_vector/1,
+    push_gc/2
+]).
 
 -export_type([store/0]).
 
@@ -83,3 +92,11 @@ materialize(Store, Slice) ->
 -spec get_state_vector(store()) -> state_vector:state_vector().
 get_state_vector(Store) ->
     block_store:get_state_vector(Store#store.blocks).
+
+-spec push_gc(store(), update:block_range()) -> ok.
+push_gc(Store, Range) ->
+    throw("wip").
+
+-spec repair(store(), item:item()) -> ok.
+repair(Store, Item) ->
+    throw("wip").

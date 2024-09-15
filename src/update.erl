@@ -1,7 +1,7 @@
 -module(update).
 
 -export([new/0, decode_update/1, integrate/2, merge_update/1]).
--export_type([update/0, pending_update/0, delete_set/0]).
+-export_type([update/0, pending_update/0, delete_set/0, block_range/0]).
 
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
@@ -354,15 +354,20 @@ integrate_loop(
                                             ShouldDelete = bc_integrate(Block, Txn, Offset),
                                             DeleteItem =
                                                 case ShouldDelete of
-                                                    true -> {ok, Block};
-                                                    false -> undefined
+                                                    true ->
+                                                        case Block of
+                                                            {item, I} -> {ok, I};
+                                                            _ -> undefined
+                                                        end;
+                                                    false ->
+                                                        undefined
                                                 end,
                                             DeleteItem2 =
                                                 case Block of
                                                     {item, Item2} ->
                                                         case Item2#item.parent of
                                                             {unknown} ->
-                                                                store:push_gc(#block_range{
+                                                                store:push_gc(Store, #block_range{
                                                                     id = Id,
                                                                     len = block_carrier_length(
                                                                         Block
@@ -374,14 +379,14 @@ integrate_loop(
                                                                 DeleteItem
                                                         end;
                                                     {gc, Gc} ->
-                                                        store:push_gc(Gc),
+                                                        store:push_gc(Store, Gc),
                                                         DeleteItem;
                                                     {skip, _} ->
                                                         DeleteItem
                                                 end,
                                             case DeleteItem2 of
                                                 {ok, B} ->
-                                                    transaction:delete(B);
+                                                    transaction:delete(Txn, B);
                                                 _ ->
                                                     ok
                                             end,
@@ -509,42 +514,38 @@ return_stack(
     ).
 
 -spec integrate(update(), transaction:transaction_mut()) ->
-    {transaction:transaction_mut(), option:option(pending_update()), option:option(update())}.
+    {option:option(pending_update()), option:option(update())}.
 integrate(Update, Txn) ->
-    RemainingBlocks =
-        case Update#update.update_blocks of
-            #{} ->
-                undefined;
-            Blocks ->
-                [CurrentClientId | ClientBlockIds] = lists:sort(maps:keys(Blocks)),
-                {CurTarget, CurBlock} =
-                    case maps:get(CurrentClientId, Update#update.update_blocks, undefined) of
-                        undefined ->
-                            {[], undefined};
-                        U ->
-                            case U of
-                                [B | Rest] -> {Rest, {ok, B}};
-                                [] -> {[], undefined}
-                            end
-                    end,
-                integrate_loop(
-                    Txn,
-                    Update,
-                    CurBlock,
-                    CurTarget,
-                    ClientBlockIds,
-                    store:get_state_vector(Txn#transaction_mut.store),
-                    state_vector:new(),
-                    #{},
-                    [],
-                    Txn#transaction_mut.store
-                )
-        end,
-    RemainingDs = option:map(
-        fun(Ds) -> #update{delete_set = Ds, update_blocks = #{}} end,
-        transaction:apply_update(Txn, Update#update.delete_set)
-    ),
-    {ok, {RemainingBlocks, RemainingDs}}.
+    RemainingBlocks = begin
+        Blocks = Update#update.update_blocks,
+        [CurrentClientId | ClientBlockIds] = lists:sort(maps:keys(Blocks)),
+        {CurTarget, CurBlock} =
+            case maps:get(CurrentClientId, Update#update.update_blocks, undefined) of
+                undefined ->
+                    {[], undefined};
+                U ->
+                    case U of
+                        [B | Rest] -> {Rest, {ok, B}};
+                        [] -> {[], undefined}
+                    end
+            end,
+        Store = transaction:get_store(Txn),
+        integrate_loop(
+            Txn,
+            Update,
+            CurBlock,
+            CurTarget,
+            ClientBlockIds,
+            store:get_state_vector(Store),
+            state_vector:new(),
+            #{},
+            [],
+            Store
+        )
+    end,
+    DeleteSet = transaction:apply_delete(Txn, Update#update.delete_set),
+    RemainingDs = #update{delete_set = DeleteSet, update_blocks = #{}},
+    {RemainingBlocks, {ok, RemainingDs}}.
 
 -spec missing(block_carrier(), state_vector:state_vector()) ->
     option:option(state_vector:client_id()).

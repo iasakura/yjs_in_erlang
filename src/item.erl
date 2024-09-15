@@ -99,7 +99,7 @@ integrate(Item, Txn, Offset) ->
     % 8. Item.contentを登録
     % 9. txn.changedに登録
     % 10. parentが削除済みかチェック
-    Store = Txn#transaction_mut.store,
+    Store = transaction:get_store(Txn),
     Item0 =
         case Offset > 0 of
             true ->
@@ -420,10 +420,10 @@ adjust_length_of_parent(Store, Parent, This) ->
 -spec integrate_content(transaction:transaction_mut(), item:item()) -> true.
 integrate_content(TransactionMut, Item) ->
     ItemContent = Item#item.content,
-    Store = TransactionMut#transaction_mut.store,
+    Store = transaction:get_store(TransactionMut),
     case ItemContent of
         {deleted, Len} ->
-            id_set:insert(TransactionMut#transaction_mut.delete_set, Item#item.id, Len),
+            id_set:insert(transaction:get_delete_set(TransactionMut), Item#item.id, Len),
             store:put_item(Store, Item#item{info = Item#item.info bor ?ITEM_FLAG_DELETED}),
             true;
         % todo: { type, Move }
