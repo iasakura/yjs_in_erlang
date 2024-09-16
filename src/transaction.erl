@@ -40,7 +40,6 @@ new_state(Doc) ->
         committed = false
     }.
 
-% wip: implement operations
 -spec transaction_loop(transaction_mut_state()) -> no_return().
 transaction_loop(State) ->
     receive
