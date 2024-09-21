@@ -315,10 +315,10 @@ integrate_loop(
                                             )
                                     end;
                                 undefined ->
-                                    % 未適用でかつ適用可能
                                     Offset = maps:get(Id#id.client, LocalSV) - Id#id.clock,
                                     case Offset =:= 0 orelse Offset < block_carrier_length(Block) of
                                         false ->
+                                            % 適用済み
                                             {NewBlock, NewStack, NewTarget, ClientBlockIds,
                                                 NewUpdate} = next(
                                                 UnappliedBlockStack,
@@ -339,6 +339,7 @@ integrate_loop(
                                                 Store
                                             );
                                         true ->
+                                            % 未適用でかつ適用可能
                                             Client = Id#id.client,
                                             NewLocalSV = state_vector:set_max(
                                                 LocalSV,

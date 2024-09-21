@@ -8,7 +8,8 @@
     materialize/2,
     delete_branch/2,
     get_state_vector/1,
-    push_gc/2
+    push_gc/2,
+    repair/2
 ]).
 
 -export_type([store/0]).
@@ -74,7 +75,7 @@ materialize(Store, Slice) ->
     Slice2 =
         case item_slice:adjacent_right(Slice1) of
             false ->
-                case item:splice(Store, Slice#item_slice.item, item_slice:len(Slice1)) of
+                case item:splice(Store, Slice1#item_slice.item, item_slice:len(Slice1)) of
                     {ok, {NewItem2, _}} ->
                         #item_slice{
                             item = NewItem2,
@@ -99,4 +100,56 @@ push_gc(Store, Range) ->
 
 -spec repair(store(), item:item()) -> ok.
 repair(Store, Item) ->
-    throw("wip").
+    case Item#item.origin of
+        {ok, Origin} ->
+            Left = block_store:get_item_clean_end(Store#store.blocks, Origin),
+            _ = option:map(fun(L) -> materialize(Store, L) end, Left),
+            ok;
+        undefined ->
+            ok
+    end,
+    case Item#item.right_origin of
+        {ok, OriginRight} ->
+            Right = block_store:get_item_clean_start(Store#store.blocks, OriginRight),
+            _ = option:map(fun(L) -> materialize(Store, L) end, Right),
+            ok;
+        undefined ->
+            ok
+    end,
+
+    {NewParentSub, NewParent} =
+        case Item#item.parent of
+            {branch, Branch} ->
+                {Item#item.parent_sub, {branch, Branch}};
+            {unknown} ->
+                case {Item#item.left, Item#item.right} of
+                    {Id, _} ->
+                        case util:get_item_from_link(Store, Id) of
+                            undefined -> {Item#item.parent_sub, {unknown}};
+                            {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
+                        end;
+                    {_, Id} ->
+                        case util:get_item_from_link(Store, Id) of
+                            undefined -> {Item#item.parent_sub, {unknown}};
+                            {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
+                        end;
+                    {_, _} ->
+                        {Item#item.parent_sub, {unknown}}
+                end;
+            {named, Name} ->
+                Branch = store:get_or_create_type(Store, Name, {undefined}),
+                {branch, Branch};
+            {id, Id} ->
+                case get_item(Store, Id) of
+                    {ok, Item} ->
+                        case Item#item.content of
+                            {type, Branch} -> {Item#item.parent_sub, {branch, Branch}};
+                            {deleted, _} -> {unknown};
+                            Other -> throw({"invalid parent", Id, Other})
+                        end;
+                    undefined ->
+                        {Item#item.parent_sub, {unknown}}
+                end
+        end,
+    put_item(Store, Item#item{parent = NewParent, parent_sub = NewParentSub}),
+    ok.

@@ -4,6 +4,7 @@
     new/0,
     put_item/2,
     get/2,
+    get_item_clean_start/2,
     get_item_clean_end/2,
     get_clock/2,
     get_client/2,
@@ -73,6 +74,17 @@ get_item_clean_end(Store, Id) ->
         BlockId = Item#item.id,
         Offset = Id#id.clock - BlockId#id.clock,
         {ok, #item_slice{item = Item, start = 0, end_ = Offset}}
+    else
+        _ -> undefined
+    end.
+
+-spec get_item_clean_start(block_store(), id:id()) -> option:option(item_slice:item_slice()).
+get_item_clean_start(Store, Id) ->
+    maybe
+        {ok, Item} ?= get_item(Store, Id),
+        BlockId = Item#item.id,
+        Offset = Id#id.clock - BlockId#id.clock,
+        {ok, #item_slice{item = Item, start = Offset, end_ = item:len(Item) - 1}}
     else
         _ -> undefined
     end.
