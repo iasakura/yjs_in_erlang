@@ -387,7 +387,7 @@ integrate_loop(
                                                 end,
                                             case DeleteItem2 of
                                                 {ok, B} ->
-                                                    transaction:delete(Txn, B);
+                                                    transaction:delete_item(Txn, B);
                                                 _ ->
                                                     ok
                                             end,

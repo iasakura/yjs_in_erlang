@@ -170,7 +170,7 @@ integrate(Item, Txn, Offset) ->
                         Item0
                 end,
             Item2 = tweak_parent_sub(Store, Item1),
-            reconnect_left_right(Store, Parent, Item2),
+            reconnect_left_right(Txn, Parent, Item2),
             adjust_length_of_parent(Store, Parent, Item2),
             % todo: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
             integrate_content(Txn, Item2),
@@ -313,7 +313,7 @@ tweak_parent_sub(Store, Item) ->
     item:item()
 ) -> true.
 reconnect_left_right(Txn, Parent, This) ->
-    Store = Txn#transaction_mut.store,
+    Store = transaction:get_store(Txn),
     case get_item_from_link(Store, This#item.left) of
         {ok, Left} ->
             store:put_item(
