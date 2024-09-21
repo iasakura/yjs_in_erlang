@@ -7,7 +7,7 @@
     apply_delete/2,
     get_store/1,
     get_delete_set/1,
-    delete/2
+    delete_item/2
 ]).
 -export_type([transaction_mut/0, subdocs/0]).
 
@@ -59,7 +59,11 @@ transaction_loop(State) ->
             transaction_loop(State);
         {Pid, set_store, NewStore} ->
             Pid ! {self(), ok},
-            transaction_loop(State#transaction_mut{store = NewStore})
+            transaction_loop(State#transaction_mut{store = NewStore});
+        {Pid, delete_item, Item} ->
+            {Res, NewState} = internal_delete_item(State, Item),
+            Pid ! {self(), Res},
+            transaction_loop(NewState)
     end.
 
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
@@ -96,10 +100,12 @@ get_delete_set(Txn) ->
         {Txn, DeleteSet} -> DeleteSet
     end.
 
--spec delete(transaction_mut(), item:item()) -> ok.
-delete(Txn, Item) ->
-    throw("wip"),
-    ok.
+-spec delete_item(transaction_mut(), item:item()) -> ok.
+delete_item(Txn, Item) ->
+    Txn ! {self(), delete_item, Item},
+    receive
+        {Txn, Res} -> Res
+    end.
 
 -spec apply_update(transaction_mut(), update:update()) -> ok.
 apply_update(Txn, Update) ->
@@ -190,78 +196,82 @@ apply_update(Txn, Update) ->
             end
     end.
 
--spec delete_item(transaction:transaction_mut_state(), item:item()) ->
-    transaction:transaction_mut_state().
-delete_item(Txn, Item) ->
+-spec internal_delete_item(transaction:transaction_mut_state(), item:item()) ->
+    {boolean(), transaction:transaction_mut_state()}.
+internal_delete_item(Txn, Item) ->
     Store = Txn#transaction_mut.store,
     case item:is_deleted(Item) of
         true ->
-            Txn;
+            {false, Txn};
         false ->
             case option:is_none(Item#item.parent_sub) andalso item:is_countable(Item) of
                 false ->
-                    Txn;
+                    true;
                 true ->
                     case Item#item.parent of
-                        undefined ->
-                            ok;
                         {branch, Branch} ->
                             store:put_branch(Store, Branch#branch{
                                 block_len = Branch#branch.block_len - Item#item.len,
                                 content_len = Branch#branch.content_len - item:content_len(Item)
-                            })
-                    end,
-                    store:put_item(
-                        Store,
-                        Item#item{
-                            info = Item#item.info bor ?ITEM_FLAG_DELETED
-                        }
-                    ),
-                    Txn2 = Txn#transaction_mut{
-                        delete_set = id_set:insert(
-                            Txn#transaction_mut.delete_set, Item#item.id, Item#item.len
-                        )
-                    },
-                    Txn3 =
-                        case Item#item.parent of
-                            undefined ->
-                                Txn2;
-                            {branch, Parent} ->
-                                transaction:internal_add_changed_type(
-                                    Txn, Parent, Item#item.parent_sub
-                                )
-                        end,
-                    Recurse =
-                        case Item#item.content of
-                            % TODO: suuport subdoc
-                            {type, Type} ->
-                                store:delete_branch(Store, Type),
-                                Start = Type#branch.start,
-                                Loop = fun Loop(Cur, Acc) ->
-                                    case Cur of
-                                        undefined ->
-                                            lists:reverse(Acc);
-                                        {ok, C} ->
-                                            Loop(C#item.right, [C#item.id | Acc])
-                                    end
-                                end,
-                                Loop(Start, []) ++ maps:values(Type#branch.map);
-                            % TODO: support move & subdocs
-                            _ ->
-                                []
-                        end,
-                    NewTxn = lists:foldl(
-                        fun(I, CurTxn) ->
-                            case store:get_item(Store, I) of
-                                {ok, Item} -> delete_item(CurTxn, Item);
-                                undefined -> CurTxn
+                            }),
+                            true;
+                        _ ->
+                            true
+                    end
+            end,
+            % item.mark_as_deleted()
+            store:put_item(
+                Store,
+                Item#item{
+                    info = Item#item.info bor ?ITEM_FLAG_DELETED
+                }
+            ),
+            Txn2 = Txn#transaction_mut{
+                delete_set = id_set:insert(
+                    Txn#transaction_mut.delete_set, Item#item.id, Item#item.len
+                )
+            },
+            Txn3 =
+                case Item#item.parent of
+                    {branch, Parent} ->
+                        transaction:internal_add_changed_type(
+                            Txn, Parent, Item#item.parent_sub
+                        );
+                    undefined ->
+                        Txn2
+                end,
+            Recurse =
+                case Item#item.content of
+                    {type, Type} ->
+                        store:delete_branch(Store, Type),
+                        Start = Type#branch.start,
+                        Loop = fun Loop(Cur, Acc) ->
+                            case Cur of
+                                undefined ->
+                                    lists:reverse(Acc);
+                                {ok, C} ->
+                                    Loop(C#item.right, [C#item.id | Acc])
                             end
                         end,
-                        Txn3,
-                        Recurse
-                    ),
-                    NewTxn
-            end
+                        Loop(Start, []) ++ maps:values(Type#branch.map);
+                    % TODO: support move & subdocs
+                    _ ->
+                        []
+                end,
+            NewTxn = lists:foldl(
+                fun(I, CurTxn) ->
+                    case store:get_item(Store, I) of
+                        {ok, Item} ->
+                            {_, NewTxn0} = internal_delete_item(CurTxn, Item),
+                            NewTxn0;
+                        undefined ->
+                            CurTxn
+                    end
+                end,
+                Txn3,
+                Recurse
+            ),
+            {true, NewTxn}
     end.
 
 -spec delete_by_range(
@@ -281,7 +291,7 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                 false ->
                     case Item#item.id#id.clock + item:len(Item) > ClockEnd of
                         false ->
-                            NewTxn = delete_item(Txn, Item),
+                            {_, NewTxn} = internal_delete_item(Txn, Item),
                             delete_by_range(
                                 NewTxn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
                             );
@@ -292,7 +302,7 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                             NewTxn0 = Txn#transaction_mut{
                                 merge_blocks = [NewItem1#item.id | Txn#transaction_mut.merge_blocks]
                             },
-                            NewTxn1 = delete_item(NewTxn0, NewItem1),
+                            {_, NewTxn1} = internal_delete_item(NewTxn0, NewItem1),
                             delete_by_range(
                                 NewTxn1,
                                 Blocks,

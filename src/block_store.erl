@@ -9,7 +9,8 @@
     get_clock/2,
     get_client/2,
     find_pivot/2,
-    get_state_vector/1
+    get_state_vector/1,
+    push_gc/2
 ]).
 -export_type([block_store/0, client_block_list/0]).
 
@@ -132,3 +133,19 @@ get_state_vector(BlockStore) ->
         state_vector:new(),
         BlockStore
     ).
+
+-spec push_gc(block_store(), update:block_range()) -> true.
+push_gc(Store, Range) ->
+    Id = Range#block_range.id,
+    Gc = #gc{
+        start = Id#id.clock,
+        end_ = Id#id.clock + Range#block_range.len - 1
+    },
+    Table =
+        case ets:lookup(Store, Id#id.client) of
+            [{_, T}] ->
+                T;
+            [] ->
+                add_client(Store, Id#id.client)
+        end,
+    ets:insert(Table, Gc).

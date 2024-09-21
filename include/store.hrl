@@ -36,7 +36,7 @@
 % }
 
 -record(store, {
-    types :: #{binary() => branch:branch()},
+    types :: types:types(),
     node_registry :: node_registry:node_registry(),
     blocks :: block_store:block_store(),
     pending :: option:option(update:pending_update()),

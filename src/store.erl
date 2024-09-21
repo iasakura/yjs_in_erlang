@@ -21,7 +21,7 @@
 -spec new() -> store().
 new() ->
     #store{
-        types = #{},
+        types = types:new(),
         node_registry = node_registry:new(),
         blocks = block_store:new(),
         pending = undefined,
@@ -94,9 +94,9 @@ materialize(Store, Slice) ->
 get_state_vector(Store) ->
     block_store:get_state_vector(Store#store.blocks).
 
--spec push_gc(store(), update:block_range()) -> ok.
+-spec push_gc(store(), update:block_range()) -> true.
 push_gc(Store, Range) ->
-    throw("wip").
+    block_store:push_gc(Store#store.blocks, Range).
 
 -spec repair(store(), item:item()) -> ok.
 repair(Store, Item) ->
@@ -138,13 +138,13 @@ repair(Store, Item) ->
                 end;
             {named, Name} ->
                 Branch = store:get_or_create_type(Store, Name, {undefined}),
-                {branch, Branch};
+                {Item#item.parent_sub, {branch, Branch}};
             {id, Id} ->
                 case get_item(Store, Id) of
                     {ok, Item} ->
                         case Item#item.content of
                             {type, Branch} -> {Item#item.parent_sub, {branch, Branch}};
-                            {deleted, _} -> {unknown};
+                            {deleted, _} -> {Item#item.parent_sub, {unknown}};
                             Other -> throw({"invalid parent", Id, Other})
                         end;
                     undefined ->
@@ -153,3 +153,20 @@ repair(Store, Item) ->
         end,
     put_item(Store, Item#item{parent = NewParent, parent_sub = NewParentSub}),
     ok.
+
+-spec put_type(store(), binary(), types:branch_ptr()) -> true.
+put_type(Store, Name, Type) ->
+    types:put(Store#store.types, Name, Type).
+
+-spec get_or_create_type(store(), binary(), type_ref:type_ref()) -> types:branch_ptr().
+get_or_create_type(Store, Name, TypeRef) ->
+    case types:get(Store#store.types, Name) of
+        {ok, Branch} ->
+            Branch;
+        error ->
+            Branch0 = branch:new_branch(TypeRef),
+            Branch1 = Branch0#branch{name = Name},
+            store:put_branch(Store, Branch1),
+            store:put_type(Store, Name, Branch1),
+            Branch1
+    end.

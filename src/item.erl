@@ -308,11 +308,12 @@ tweak_parent_sub(Store, Item) ->
     end.
 
 -spec reconnect_left_right(
-    store:store(),
+    transaction:transaction_mut(),
     branch:branch(),
     item:item()
 ) -> true.
-reconnect_left_right(Store, Parent, This) ->
+reconnect_left_right(Txn, Parent, This) ->
+    Store = Txn#transaction_mut.store,
     case get_item_from_link(Store, This#item.left) of
         {ok, Left} ->
             store:put_item(
@@ -365,9 +366,9 @@ reconnect_left_right(Store, Parent, This) ->
                         Parent#branch{map = maps:put(ParentSubKey, This#item.id, Parent#branch.map)}
                     ),
                     case get_item_from_link(Store, This#item.left) of
-                        {ok, _Left2} ->
+                        {ok, Left2} ->
                             % todo: support `weak` feature
-                            % WIP: txn.delete(Left)
+                            transaction:delete_item(Txn, Left2),
                             true;
                         _ ->
                             true
