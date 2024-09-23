@@ -123,12 +123,12 @@ repair(Store, Item) ->
                 {Item#item.parent_sub, {branch, Branch}};
             {unknown} ->
                 case {Item#item.left, Item#item.right} of
-                    {Id, _} ->
+                    {{ok, _} = Id, _} ->
                         case util:get_item_from_link(Store, Id) of
                             undefined -> {Item#item.parent_sub, {unknown}};
                             {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
                         end;
-                    {_, Id} ->
+                    {_, {ok, _} = Id} ->
                         case util:get_item_from_link(Store, Id) of
                             undefined -> {Item#item.parent_sub, {unknown}};
                             {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
@@ -137,7 +137,7 @@ repair(Store, Item) ->
                         {Item#item.parent_sub, {unknown}}
                 end;
             {named, Name} ->
-                Branch = store:get_or_create_type(Store, Name, {undefined}),
+                Branch = get_or_create_type(Store, Name, {undefined}),
                 {Item#item.parent_sub, {branch, Branch}};
             {id, Id} ->
                 case get_item(Store, Id) of
@@ -166,7 +166,7 @@ get_or_create_type(Store, Name, TypeRef) ->
         error ->
             Branch0 = branch:new_branch(TypeRef),
             Branch1 = Branch0#branch{name = Name},
-            store:put_branch(Store, Branch1),
-            store:put_type(Store, Name, Branch1),
+            put_branch(Store, Branch1),
+            put_type(Store, Name, Branch1),
             Branch1
     end.

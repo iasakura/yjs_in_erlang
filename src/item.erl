@@ -1,6 +1,6 @@
 -module(item).
 
--export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3, is_countable/1]).
+-export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3, is_countable/1, content_len/1]).
 -export_type([item/0]).
 
 -import(util, [get_item_from_link/2]).

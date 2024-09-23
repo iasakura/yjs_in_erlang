@@ -234,7 +234,7 @@ internal_delete_item(Txn, Item) ->
             Txn3 =
                 case Item#item.parent of
                     {branch, Parent} ->
-                        transaction:internal_add_changed_type(
+                        internal_add_changed_type(
                             Txn, Parent, Item#item.parent_sub
                         );
                     undefined ->

@@ -1,5 +1,6 @@
 -module(range).
 
+-export([decode_range/1, try_join/2]).
 -export_type([range/0]).
 
 -include("../include/range.hrl").
