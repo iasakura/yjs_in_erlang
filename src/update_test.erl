@@ -1,9 +1,7 @@
 -module(update_test).
 
 -include_lib("eunit/include/eunit.hrl").
--include("../include/update.hrl").
--include("../include/item.hrl").
--include("../include/id.hrl").
+-include("../include/records.hrl").
 
 setup() ->
     logging:init().

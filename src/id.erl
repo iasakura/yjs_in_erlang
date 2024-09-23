@@ -12,4 +12,4 @@
 read_id(Bin) ->
     {Client, Rest} = var_int:decode_uint(Bin),
     {Clock, Rest2} = var_int:decode_uint(Rest),
-    {#id{client = Client, clock = Clock}, Rest2}.
+    {#id{client = state_vector:integer_to_client_id(Client), clock = Clock}, Rest2}.

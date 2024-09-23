@@ -1,20 +1,20 @@
 -module(item_content).
 
--export([countable/1, decode/2, len/1]).
+-export([countable/1, decode/2, len/1, split/2]).
 -export_type([item_content/0]).
 
 -include("../include/constants.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 -type item_content() ::
-    {any, any:any_type()}
+    {any, [any:any_type()]}
     | {binary, binary()}
     | {deleted, integer()}
     % {doc, option:option(doc()), doc()}
     % | {json, [json()]}
     % {embed, any_type()} |
     % | {format, string(), any_type()}
-    % wip: correct?
+    % wip: base16 encode
     | {string, binary()}
     | {type, branch:branch()}.
 % | {move, move()}.
@@ -27,8 +27,10 @@ countable({type, _}) -> true;
 countable({any, _}) -> true.
 
 -spec len(item_content()) -> integer().
-len({delete, D}) -> D;
+len({deleted, D}) -> D;
+% only supports OffsetKind:Bytes
 len({string, S}) -> byte_size(S);
+% todo: any / json
 len(_) -> 1.
 
 -spec decode(binary(), integer()) -> {item_content(), binary()}.
@@ -62,3 +64,20 @@ decode(Bin, RefNum) ->
             {Values, Rest1} = Loop(0, [], Rest),
             {{any, Values}, Rest1}
     end.
+
+-spec split(item_content(), integer()) -> option:option({item_content(), item_content()}).
+split({any, Value}, Offset) ->
+    {Left, Right} = lists:split(Offset, Value),
+    {ok, {{any, Left}, {any, Right}}};
+split({string, String}, Offset) ->
+    UTF16Offset = util:compute_utf16_offset(String, Offset),
+    Left = binary:part(String, 0, UTF16Offset),
+    Right = binary:part(String, UTF16Offset, byte_size(String) - UTF16Offset),
+    {ok, {{string, Left}, {string, Right}}};
+split({deleted, Len}, Offset) ->
+    case Len >= Offset of
+        true -> {ok, {{deleted, Offset}, {deleted, Len - Offset}}};
+        false -> undefined
+    end;
+split(_, _) ->
+    undefined.
