@@ -163,9 +163,9 @@ get_or_create_type(Store, Name, TypeRef) ->
     case types:get(Store#store.types, Name) of
         {ok, Branch} ->
             Branch;
-        error ->
+        undefined ->
             Branch0 = branch:new_branch(TypeRef),
-            Branch1 = Branch0#branch{name = Name},
+            Branch1 = Branch0#branch{name = {ok, Name}},
             put_branch(Store, Branch1),
             put_type(Store, Name, Branch1),
             Branch1

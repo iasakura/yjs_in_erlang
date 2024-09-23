@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        otp_version: ['26.1.2']
-        rebar3_version: ['3.22.1']
+        otp_version: ["26.1.2"]
+        rebar3_version: ["3.22.1"]
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -37,8 +37,8 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        otp_version: ['26.1.2']
-        rebar3_version: ['3.22.1']
+        otp_version: ["26.1.2"]
+        rebar3_version: ["3.22.1"]
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -61,7 +61,4 @@ jobs:
       - name: eqWAlizer
         # eqwalize-all do not return error code on error
         run: |
-          ./elp eqwalize-all | tee log.txt
-          if ! grep -q "NO ERRORS" log.txt; then
-            exit 1
-          fi
+          ./elp eqwalize-all | tee /dev/stderr | grep -q 'NO ERRORS'

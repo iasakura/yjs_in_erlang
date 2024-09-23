@@ -11,6 +11,7 @@
 ]).
 -export_type([transaction_mut/0, subdocs/0]).
 
+-include_lib("kernel/include/logger.hrl").
 -include("../include/constants.hrl").
 -include("../include/records.hrl").
 
@@ -44,9 +45,10 @@ new_state(Doc) ->
 transaction_loop(State) ->
     receive
         {Pid, apply_delete, Txn, DeleteSet} ->
-            {DeleteSet, NewState} = internal_apply_delete(State, DeleteSet),
+            DeleteSet = internal_apply_delete(State, DeleteSet),
+            ?LOG_DEBUG("DeleteSet: ~p", [DeleteSet]),
             Pid ! {Txn, DeleteSet},
-            transaction_loop(NewState);
+            transaction_loop(State);
         {Pid, add_changed_type, Txn, Parent, ParentSub} ->
             NewState = internal_add_changed_type(State, Parent, ParentSub),
             Pid ! {Txn, ok},
