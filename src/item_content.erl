@@ -70,9 +70,9 @@ split({any, Value}, Offset) ->
     {Left, Right} = lists:split(Offset, Value),
     {ok, {{any, Left}, {any, Right}}};
 split({string, String}, Offset) ->
-    % WIP: utf-16でOffset番目でbinaryを分割する
-    Left = binary:part(String, 0, Offset),
-    Right = binary:part(String, Offset, byte_size(String) - Offset),
+    UTF16Offset = util:compute_utf16_offset(String, Offset),
+    Left = binary:part(String, 0, UTF16Offset),
+    Right = binary:part(String, UTF16Offset, byte_size(String) - UTF16Offset),
     {ok, {{string, Left}, {string, Right}}};
 split({deleted, Len}, Offset) ->
     case Len >= Offset of
