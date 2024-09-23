@@ -210,12 +210,16 @@ integrate_loop(
     UnappliedBlockStack,
     Store
 ) ->
+    ?LOG_DEBUG(
+        "CurBlock: ~p, CurTarget: ~p, ClientBlockIds: ~p, LocalSV: ~p, MissingSV: ~p, Remaining: ~p, UnappliedBlockStack: ~p",
+        [CurBlock, CurTarget, ClientBlockIds, LocalSV, MissingSV, Remaining, UnappliedBlockStack]
+    ),
     case CurBlock of
         undefined ->
             case Remaining of
                 [] ->
                     undefined;
-                {ok, _} ->
+                _ ->
                     {ok, #pending_update{
                         update = #update{
                             update_blocks = Remaining,
@@ -258,7 +262,7 @@ integrate_loop(
                                         % Update内にDepの依存がない場合, Remainingに退避する
                                         undefined ->
                                             NewMissingSV = state_vector:set_min(
-                                                MissingSV, Dep, maps:get(Dep, LocalSV, 0)
+                                                MissingSV, Dep, state_vector:get(LocalSV, Dep)
                                             ),
                                             {NewUpdateBlocks, NewRemaining} = return_stack(
                                                 UnappliedBlockStack,
@@ -315,7 +319,7 @@ integrate_loop(
                                             )
                                     end;
                                 undefined ->
-                                    Offset = maps:get(Id#id.client, LocalSV) - Id#id.clock,
+                                    Offset = state_vector:get(LocalSV, Id#id.client) - Id#id.clock,
                                     case Offset =:= 0 orelse Offset < block_carrier_length(Block) of
                                         false ->
                                             % 適用済み
@@ -391,7 +395,8 @@ integrate_loop(
                                                 _ ->
                                                     ok
                                             end,
-                                            {NewBlock, NewStack, NewTarget, NewUpdate2} = next(
+                                            {NewBlock, NewStack, NewTarget, NewClientBlockIds,
+                                                NewUpdate2} = next(
                                                 UnappliedBlockStack,
                                                 CurTarget,
                                                 ClientBlockIds,
@@ -402,7 +407,7 @@ integrate_loop(
                                                 NewUpdate2,
                                                 NewBlock,
                                                 NewTarget,
-                                                ClientBlockIds,
+                                                NewClientBlockIds,
                                                 NewLocalSV,
                                                 MissingSV,
                                                 Remaining,
@@ -424,7 +429,7 @@ integrate_loop(
                                 update_blocks = NewUpdateBlocks
                             },
                             NewStack2 = [],
-                            {NewBlock, NewStack3, NewTarget, NewUpdate2} = next(
+                            {NewBlock, NewStack3, NewTarget, NewClientBlockIds, NewUpdate2} = next(
                                 NewStack2, CurTarget, ClientBlockIds, NewUpdate
                             ),
                             integrate_loop(
@@ -432,7 +437,7 @@ integrate_loop(
                                 NewUpdate2,
                                 NewBlock,
                                 NewTarget,
-                                ClientBlockIds,
+                                NewClientBlockIds,
                                 LocalSV,
                                 NewMissingSV,
                                 NewRemaining,
@@ -518,9 +523,10 @@ return_stack(
 -spec integrate(update(), transaction:transaction_mut()) ->
     {option:option(pending_update()), option:option(update())}.
 integrate(Update, Txn) ->
-    RemainingBlocks =
+    RemainingBlocks = begin
+        ?LOG_DEBUG("Update: ~p", [Update#update.update_blocks]),
         case Update#update.update_blocks of
-            #{} ->
+            M when map_size(M) =:= 0 ->
                 undefined;
             _ ->
                 begin
@@ -550,7 +556,8 @@ integrate(Update, Txn) ->
                         Store
                     )
                 end
-        end,
+        end
+    end,
     DeleteSet = transaction:apply_delete(Txn, Update#update.delete_set),
     RemainingDs = #update{delete_set = DeleteSet, update_blocks = #{}},
     {RemainingBlocks, {ok, RemainingDs}}.
@@ -564,7 +571,7 @@ missing({item, Item}, LocalSV) ->
                 {ok, Origin} ->
                     case
                         (Origin#id.client =/= Item#item.id#id.client andalso
-                            Origin#id.clock >= maps:get(Origin#id.client, LocalSV))
+                            Origin#id.clock >= state_vector:get(LocalSV, Origin#id.client))
                     of
                         true -> {ok, Origin#id.client};
                         false -> undefined
@@ -577,7 +584,8 @@ missing({item, Item}, LocalSV) ->
                 {ok, RightOrigin} ->
                     case
                         (RightOrigin#id.client =/= Item#item.id#id.client andalso
-                            RightOrigin#id.clock >= maps:get(RightOrigin#id.client, LocalSV))
+                            RightOrigin#id.clock >=
+                                state_vector:get(LocalSV, RightOrigin#id.client))
                     of
                         true ->
                             {ok, RightOrigin#id.client};
@@ -594,7 +602,8 @@ missing({item, Item}, LocalSV) ->
                         {ok, ParentItem} ->
                             case
                                 (ParentItem#id.client =/= Item#item.id#id.client andalso
-                                    ParentItem#id.clock >= maps:get(ParentItem#id.client, LocalSV))
+                                    ParentItem#id.clock >=
+                                        state_vector:get(LocalSV, ParentItem#id.client))
                             of
                                 true -> {ok, ParentItem#id.client};
                                 false -> undefined
@@ -605,7 +614,7 @@ missing({item, Item}, LocalSV) ->
                 {id, Parent} ->
                     case
                         (Parent#id.client =/= Item#item.id#id.client andalso
-                            Parent#id.clock >= maps:get(Parent#id.client, LocalSV))
+                            Parent#id.clock >= state_vector:get(LocalSV, Parent#id.client))
                     of
                         true -> {ok, Parent#id.client};
                         false -> undefined

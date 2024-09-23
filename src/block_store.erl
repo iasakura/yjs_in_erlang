@@ -10,17 +10,19 @@
     get_client/2,
     find_pivot/2,
     get_state_vector/1,
-    push_gc/2
+    push_gc/2,
+    get_all/1
 ]).
 -export_type([block_store/0, client_block_list/0]).
 
+-include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 
 -opaque block_store() :: ets:table().
 -opaque client_block_list() :: ets:table().
 
 -spec new() -> block_store().
-new() -> ets:new(block_store, [set, {keypos, #block_store_item.client}]).
+new() -> ets:new(block_store, [ordered_set, {keypos, #block_store_item.client}]).
 
 -spec add_client(block_store(), state_vector:client_id()) -> client_block_list().
 add_client(BlockStore, Client) ->
@@ -34,7 +36,7 @@ add_client(BlockStore, Client) ->
 get_client(BlockStore, Client) ->
     case ets:lookup(BlockStore, Client) of
         [] -> undefined;
-        [{_, Table}] -> {ok, Table}
+        [#block_store_item{table = Table}] -> {ok, Table}
     end.
 
 -spec get(block_store(), id:id()) -> option:option(block:block_cell()).
@@ -42,7 +44,7 @@ get(BlockStore, #id{client = Client} = Key) ->
     case ets:lookup(BlockStore, Client) of
         [] ->
             undefined;
-        [{_, ClientBlockList}] ->
+        [#block_store_item{table = ClientBlockList}] ->
             case ets:lookup(ClientBlockList, Key) of
                 [] -> undefined;
                 [{_, Block}] -> {ok, Block}
@@ -61,12 +63,12 @@ put_item(BlockStore, Item) ->
     #id{client = ClientId} = Item#item.id,
     Table =
         case ets:lookup(BlockStore, ClientId) of
-            [{_, T}] ->
+            [#block_store_item{table = T}] ->
                 T;
             [] ->
                 add_client(BlockStore, ClientId)
         end,
-    ets:insert(Table, Item).
+    ets:insert(Table, #client_block{start = Item#item.id#id.clock, cell = {block, Item}}).
 
 -spec get_item_clean_end(block_store(), id:id()) -> option:option(item_slice:item_slice()).
 get_item_clean_end(Store, Id) ->
@@ -93,7 +95,7 @@ get_item_clean_start(Store, Id) ->
 -spec get_clock(block_store(), state_vector:client_id()) -> integer().
 get_clock(BlockStore, Client) ->
     case ets:lookup(BlockStore, Client) of
-        [{_, Table}] ->
+        [#block_store_item{table = Table}] ->
             case ets:last(Table) of
                 '$end_of_table' -> 0;
                 Key -> Key
@@ -122,7 +124,7 @@ find_pivot(Table, Clock) ->
 -spec get_state_vector(block_store()) -> state_vector:state_vector().
 get_state_vector(BlockStore) ->
     ets:foldl(
-        fun({ClientId, Table}, Acc) ->
+        fun(#block_store_item{client = ClientId, table = Table}, Acc) ->
             Clock =
                 case ets:last(Table) of
                     '$end_of_table' -> 0;
@@ -143,9 +145,28 @@ push_gc(Store, Range) ->
     },
     Table =
         case ets:lookup(Store, Id#id.client) of
-            [{_, T}] ->
+            [#block_store_item{table = T}] ->
                 T;
             [] ->
                 add_client(Store, Id#id.client)
         end,
     ets:insert(Table, Gc).
+
+-spec get_all(block_store()) -> #{state_vector:client_id() => block:block_cell()}.
+get_all(BlockStore) ->
+    ets:foldl(
+        fun(X, Acc) ->
+            #block_store_item{client = Client, table = Table} = X,
+            ets:foldl(
+                fun(Y, Acc1) ->
+                    ?LOG_DEBUG("Y: ~p", [Y]),
+                    #client_block{cell = BlockCell} = Y,
+                    maps:put(Client, BlockCell, Acc1)
+                end,
+                Acc,
+                Table
+            )
+        end,
+        #{},
+        BlockStore
+    ).
