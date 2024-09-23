@@ -8,20 +8,20 @@ read_string(Bin) ->
     Loop = fun Loop(Rest, Acc) ->
         case Rest of
             0 ->
-                {binary:part(B, Acc), binary:part(B, Acc, byte_size(Bin) - Acc)};
+                {binary:part(B, 0, Acc), binary:part(B, Acc, byte_size(B) - Acc)};
             _ ->
+                Ch = binary:at(Bin, Acc),
                 CharLen =
-                    case binary:at(Bin, Acc) band 16#FFFF of
-                        0 ->
+                    case Ch band 16#FFFF =:= Ch of
+                        true ->
                             1;
-                        _ ->
+                        false ->
                             2
                     end,
-                Loop(Rest - 1, Acc + CharLen)
+                Loop(Rest - CharLen, Acc + CharLen)
         end
     end,
-    BinaryLen = Loop(Len, 0),
-    {binary:part(B, 0, BinaryLen), binary:part(B, BinaryLen)}.
+    Loop(Len, 0).
 
 -spec read_buf(binary()) -> {binary(), binary()}.
 read_buf(Bin) ->
