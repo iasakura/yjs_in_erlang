@@ -150,7 +150,7 @@ push_gc(Store, Range) ->
             [] ->
                 add_client(Store, Id#id.client)
         end,
-    ets:insert(Table, Gc).
+    ets:insert(Table, #client_block{start = Gc#gc.start, cell = {gc, Gc}}).
 
 -spec get_all(block_store()) -> #{state_vector:client_id() => block:block_cell()}.
 get_all(BlockStore) ->

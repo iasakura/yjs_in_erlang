@@ -93,16 +93,16 @@ decode_block(Id, Bin) ->
                     0 ->
                         {undefined, Rest};
                     _ ->
-                        {Id, RestId} = id:read_id(Rest),
-                        {{ok, Id}, RestId}
+                        {Id2, RestId} = id:read_id(Rest),
+                        {{ok, Id2}, RestId}
                 end,
             {RightOrigin, RestRO} =
                 case Info band ?HAS_RIGHT_ORIGIN of
                     0 ->
                         {undefined, RestO};
                     _ ->
-                        {Id, RestId2} = id:read_id(RestO),
-                        {{ok, Id}, RestId2}
+                        {Id3, RestId2} = id:read_id(RestO),
+                        {{ok, Id3}, RestId2}
                 end,
             {Parent, RestPA} =
                 case CantCopyParentInfo of
