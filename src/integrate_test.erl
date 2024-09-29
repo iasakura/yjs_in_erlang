@@ -10,7 +10,13 @@ setup() ->
 cleanup(_) -> ok.
 
 transition_test_() ->
-    [{setup, fun setup/0, fun cleanup/1, [fun integrate_test_case1/0, fun integrate_test_case2/0]}].
+    [
+        {setup, fun setup/0, fun cleanup/1, [
+            % fun integrate_test_case1/0,
+            % fun integrate_test_case2/0,
+            fun integrate_test_case3/0
+        ]}
+    ].
 
 integrate_test_case1() ->
     Doc = doc:new(),
@@ -29,5 +35,17 @@ integrate_test_case2() ->
     Txn = transaction:new(Doc),
     {Update, Rest} = update:decode_update(BinaryContent),
     transaction:apply_update(Txn, Update),
+    ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
+    ok.
+
+integrate_test_case3() ->
+    {ok, A} = file:read_file("tests/test2-a.bin"),
+    {ok, B} = file:read_file("tests/test2-b.bin"),
+    {UpdateA, _} = update:decode_update(A),
+    {UpdateB, _} = update:decode_update(B),
+    Doc = doc:new(),
+    Txn = transaction:new(Doc),
+    transaction:apply_update(Txn, UpdateA),
+    transaction:apply_update(Txn, UpdateB),
     ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
     ok.

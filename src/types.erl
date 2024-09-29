@@ -2,30 +2,28 @@
 
 -export([
     new/0,
-    put/3,
+    put/2,
     get/2
 ]).
--export_type([types/0, branch_ptr/0, type_ptr/0]).
+-export_type([types/0, branch/0]).
 
 -include("../include/branch.hrl").
 
--type branch_ptr() :: #branch{}.
+-type branch() :: #branch{}.
 
--type type_ptr() :: {unknown} | {branch, branch_ptr()} | {named, string()} | {id, id:id()}.
+-opaque types() :: ets:table().
 
--type types() :: ets:table().
-
--record(types_entry, {name :: binary(), type :: branch_ptr()}).
+-record(types_entry, {name :: binary()}).
 
 -spec new() -> types().
-new() -> ets:new(types, [set, {keypos, #types_entry.name}]).
+new() -> ets:new(types, [public, set, {keypos, #types_entry.name}]).
 
--spec put(types(), binary(), branch_ptr()) -> true.
-put(Types, Name, Type) -> ets:insert(Types, #types_entry{name = Name, type = Type}).
+-spec put(types(), binary()) -> true.
+put(Types, Name) -> ets:insert(Types, #types_entry{name = Name}).
 
--spec get(types(), binary()) -> option:option(branch_ptr()).
+-spec get(types(), binary()) -> option:option(binary()).
 get(Types, Name) ->
     case ets:lookup(Types, Name) of
         [] -> undefined;
-        [{_, Entry}] -> {ok, Entry#types_entry.type}
+        [#types_entry{name = Name}] -> {ok, Name}
     end.

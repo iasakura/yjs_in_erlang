@@ -126,6 +126,7 @@ decode_block(Id, Bin) ->
                     true ->
                         {undefined, RestPA}
                 end,
+
             ?LOG_DEBUG("Parent: ~p, ParentSub: ~p", [Parent, ParentSub]),
             {Content, RestItem} = item_content:decode(RestPS, Info),
             Item = item:new_item(
@@ -380,7 +381,6 @@ integrate_loop(
                                                                 }),
                                                                 undefined;
                                                             _ ->
-                                                                store:put_item(Store, Item2),
                                                                 DeleteItem
                                                         end;
                                                     {gc, Gc} ->
