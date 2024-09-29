@@ -165,10 +165,12 @@ apply_update(Txn, Update) ->
                 option:map(fun(U) -> U#update.delete_set end, RemainingDs);
             {ok, PendingDs} ->
                 Ds2 = apply_delete(Txn, PendingDs),
-                case RemainingDs of
+                case {RemainingDs, Ds2} of
+                    {undefined, undefined} -> undefined;
+                    {undefined, Ds} -> {ok, Ds};
+                    {Ds, undefined} -> {ok, Ds};
                     % eqwalizer:ignore: Unbound rec: update
-                    {ok, Ds1} -> {ok, id_set:merge_id_set(Ds1#update.delete_set, Ds2)};
-                    undefined -> {ok, Ds2}
+                    {{ok, Ds1}, {ok, Ds2}} -> {ok, id_set:merge_id_set(Ds1#update.delete_set, Ds2)}
                 end
         end,
 
@@ -237,7 +239,7 @@ internal_delete_item(Txn, Item) ->
                         internal_add_changed_type(
                             Txn, Parent, Item#item.parent_sub
                         );
-                    _ ->
+                    undefined ->
                         Txn2
                 end,
             Recurse =
@@ -361,7 +363,7 @@ internal_add_changed_type(Txn, Parent, ParentSub) ->
             ),
             Added = sets:add_element(ParentSub, ChangedSet),
             Txn#transaction_mut{
-                changed = maps:put(branch:get_type_ptr(Parent), Added, Txn#transaction_mut.changed)
+                changed = maps:put({branch, Parent}, Added, Txn#transaction_mut.changed)
             };
         _ ->
             Txn

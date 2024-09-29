@@ -5,7 +5,6 @@
 
 -import(util, [get_item_from_link/2]).
 
--include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
 
@@ -87,28 +86,19 @@ last_id(Item) -> Item#item.id#id{clock = Item#item.id#id.clock + len(Item) - 1}.
 
 -spec integrate(item(), transaction:transaction_mut(), integer()) -> boolean().
 integrate(Item, Txn, Offset) ->
-    try
-        integrate_(Item, Txn, Offset)
-    catch
-        throw:_ ->
-            true
-    end.
-
-% 1. Offset > 0 なら thisを諸々調整
-% - Item.idのclockをoffsetだけ増加
-% 2. ParentをName/Idを利用しない形へ修正
-% 3. Item.leftを計算
-% 4. ParentSubをitem.left/rightから再計算
-% 5. Item.right を更新
-% - item.leftがある-> Item.left.rightに、Item.left.rightをItemに更新
-% - ない -> Item.rightをParentの最左要素に更新
-% 6. Parentのlenを更新
-% 7. move周り
-% 8. Item.contentを登録
-% 9. txn.changedに登録
-% 10. parentが削除済みかチェック
--spec integrate_(item(), transaction:transaction_mut(), integer()) -> boolean().
-integrate_(Item, Txn, Offset) ->
+    % 1. Offset > 0 なら thisを諸々調整
+    % - Item.idのclockをoffsetだけ増加
+    % 2. ParentをName/Idを利用しない形へ修正
+    % 3. Item.leftを計算
+    % 4. ParentSubをitem.left/rightから再計算
+    % 5. Item.right を更新
+    % - item.leftがある-> Item.left.rightに、Item.left.rightをItemに更新
+    % - ない -> Item.rightをParentの最左要素に更新
+    % 6. Parentのlenを更新
+    % 7. move周り
+    % 8. Item.contentを登録
+    % 9. txn.changedに登録
+    % 10. parentが削除済みかチェック
     Store = transaction:get_store(Txn),
     Item0 =
         case Offset > 0 of
@@ -145,24 +135,10 @@ integrate_(Item, Txn, Offset) ->
             false ->
                 Item
         end,
-    ?LOG_DEBUG("item: ~p", [Item0]),
     ParentOpt =
         case Item0#item.parent of
-            {named, Name} ->
-                Branch = store:get_or_create_type(Store, Name, {undefined}),
-                {ok, Branch};
-            {id, Id0} ->
-                case store:get_item(Store, Id0) of
-                    {ok, I0} ->
-                        case I0#item.content of
-                            {type, Branch} -> {ok, Branch};
-                            _ -> undefined
-                        end;
-                    undefined ->
-                        undefined
-                end;
-            {unknown} ->
-                throw("return true")
+            {branch, Branch} -> {ok, Branch};
+            _ -> undefined
         end,
 
     Left = get_item_from_link(Store, Item0#item.left),
@@ -180,30 +156,27 @@ integrate_(Item, Txn, Offset) ->
                 false;
             {ok, Left0} ->
                 get_item_from_link(Store, Left0#item.right) =/=
-                    get_item_from_link(Store, Item0#item.right)
+                    get_item_from_link(Store, Item#item.right)
         end,
 
     case ParentOpt of
         {ok, Parent} ->
-            Item2 =
+            Item1 =
                 if
-                    % Leftがnull && Rightが先頭でない || Leftが自分以外のRightを持つ
-                    (Left =:= undefined andalso RightIsNullOrHasLeft) orelse
-                        LeftHasOtherRightThanSelf ->
-                        NewLeft = compute_left(Store, Parent, Item0, Left, Right),
-                        Item0#item{left = option:map(fun(L) -> L#item.id end, NewLeft)};
+                    (Left =/= undefined band RightIsNullOrHasLeft) orelse LeftHasOtherRightThanSelf ->
+                        Left = compute_left(Store, Parent, Item0, Left, Right),
+                        Item#item{left = option:map(fun(L) -> L#item.id end, Left)};
                     true ->
                         Item0
                 end,
-            store:put_item(Store, Item2),
-            Item3 = tweak_parent_sub(Store, Item2),
-            reconnect_left_right(Txn, Parent, Item3),
-            adjust_length_of_parent(Store, Parent, Item3),
+            Item2 = tweak_parent_sub(Store, Item1),
+            reconnect_left_right(Txn, Parent, Item2),
+            adjust_length_of_parent(Store, Parent, Item2),
             % todo: moved https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L678-L703
-            integrate_content(Txn, Item3),
-            transaction:add_changed_type(Txn, Parent, Item3#item.parent_sub),
+            integrate_content(Txn, Item2),
+            transaction:add_changed_type(Txn, Parent, Item2#item.parent_sub),
             % todo: is_linked(): https://github.com/y-crdt/y-crdt/blob/04d82e86fec64cce0d363c2b93dd1310de05b9a1/yrs/src/block.rs#L743-L750
-            check_deleted(Store, Parent, Item3);
+            check_deleted(Store, Parent, Item2);
         _ ->
             false
     end.
@@ -220,7 +193,7 @@ compute_left(Store, ParentRef, This, Left, Right) ->
         case Left of
             {ok, Left0} ->
                 get_item_from_link(Store, Left0#item.right);
-            undefined ->
+            _ ->
                 case This#item.parent_sub of
                     {ok, Sub} ->
                         Loop0 = fun Loop(O0) ->
@@ -235,16 +208,12 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                             end
                         end,
                         Loop0(maps:get(Sub, ParentRef#branch.map, undefined));
-                    undefined ->
+                    _ ->
                         get_item_from_link(Store, ParentRef#branch.start)
                 end
         end,
-    ?LOG_DEBUG("compute_left: ~p", [O]),
 
     Loop1 = fun Loop(C, CurLeft, ItemBeforeOrigin, ConflictingItems) ->
-        ?LOG_DEBUG("Loop: ~p, ~p, ~p, ~p, ~p", [
-            This, C, CurLeft, ItemBeforeOrigin, ConflictingItems
-        ]),
         case C of
             undefined ->
                 CurLeft;
@@ -259,10 +228,10 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                             % case 1.
                             This#item.origin == Item0#item.origin ->
                                 if
-                                    Item0#item.id#id.client < This#item.id#id.client ->
+                                    Item0#item.id#id.clock < This#item.id#id.clock ->
                                         Loop(
                                             get_item_from_link(Store, Item0#item.right),
-                                            {ok, Item0},
+                                            Item0,
                                             ItemBeforeOrigin0,
                                             #{}
                                         );
@@ -291,7 +260,7 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                                                             get_item_from_link(
                                                                 Store, Item0#item.right
                                                             ),
-                                                            {ok, Item0},
+                                                            Item0,
                                                             ItemBeforeOrigin0,
                                                             #{}
                                                         );
@@ -306,9 +275,7 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                 end
         end
     end,
-    Res = Loop1(O, Left, #{}, #{}),
-    ?LOG_DEBUG("compute_left: ~p", [Res]),
-    Res.
+    Loop1(O, Left, #{}, #{}).
 
 -spec tweak_parent_sub(
     store:store(),
@@ -347,7 +314,6 @@ tweak_parent_sub(Store, Item) ->
 ) -> true.
 reconnect_left_right(Txn, Parent, This) ->
     Store = transaction:get_store(Txn),
-    ?LOG_DEBUG("reconnect_left_right: ~p", [This]),
     case get_item_from_link(Store, This#item.left) of
         {ok, Left} ->
             store:put_item(

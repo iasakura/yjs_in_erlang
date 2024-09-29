@@ -8,13 +8,13 @@
 -opaque node_registry() :: ets:table().
 
 -spec new() -> node_registry().
-new() -> ets:new(node_registry, [public, set, {keypos, #node_registry_item.id}]).
+new() -> ets:new(node_registry, [set, {keypos, #node_registry_item.id}]).
 
 -spec get_by(node_registry(), binary() | id:id()) -> option:option(branch:branch()).
 get_by(NodeRegistry, Name) ->
     case ets:lookup(NodeRegistry, Name) of
         [] -> undefined;
-        [#node_registry_item{branch = Node}] -> {ok, Node}
+        [{_, Node}] -> {ok, Node}
     end.
 
 -spec put(node_registry(), branch:branch()) -> true.

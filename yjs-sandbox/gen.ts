@@ -7,7 +7,7 @@ const saveUpdate = (testCaseName: string, update: Uint8Array) => {
   fs.writeFileSync(testsDir + "/" + testCaseName + ".bin", update);
 };
 
-const gen_test1 = () => {
+const main = () => {
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText("text");
   ytext.insert(0, "あいうえお");
@@ -19,35 +19,4 @@ const gen_test1 = () => {
   saveUpdate("test1", x);
 };
 
-const gen_test2 = () => {
-  let a: Uint8Array;
-  {
-    const ydoc = new Y.Doc();
-    ydoc.clientID = 0;
-    const ytext = ydoc.getText("text");
-    ytext.insert(0, "abc");
-    a = Y.encodeStateAsUpdate(ydoc);
-  }
-
-  let b: Uint8Array;
-  {
-    const ydoc = new Y.Doc();
-    ydoc.clientID = 1;
-    const ytext = ydoc.getText("text");
-    ytext.insert(0, "xyz");
-    b = Y.encodeStateAsUpdate(ydoc);
-  }
-
-  const ydoc = new Y.Doc();
-  ydoc.transact(() => {
-    Y.applyUpdate(ydoc, a);
-    Y.applyUpdate(ydoc, b);
-  });
-  console.log(ydoc.getText("text").toString());
-
-  saveUpdate("test2-a", a);
-  saveUpdate("test2-b", b);
-};
-
-gen_test1();
-gen_test2();
+main();

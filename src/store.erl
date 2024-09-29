@@ -9,8 +9,7 @@
     delete_branch/2,
     get_state_vector/1,
     push_gc/2,
-    repair/2,
-    get_or_create_type/3
+    repair/2
 ]).
 
 -export_type([store/0]).
@@ -35,7 +34,7 @@ new() ->
 -spec get_item(store(), id:id()) -> option:option(item:item()).
 get_item(Store, Id) ->
     case block_store:get(Store#store.blocks, Id) of
-        {ok, {block, Item}} -> {ok, Item};
+        {ok, {item, Item}} -> {ok, Item};
         {ok, {gc, Gc}} -> throw(io_lib:format("WIP: GC: ~p", [Gc]));
         undefined -> undefined
     end.
@@ -120,6 +119,8 @@ repair(Store, Item) ->
 
     {NewParentSub, NewParent} =
         case Item#item.parent of
+            {branch, Branch} ->
+                {Item#item.parent_sub, {branch, Branch}};
             {unknown} ->
                 case {Item#item.left, Item#item.right} of
                     {{ok, _} = Id, _} ->
@@ -136,13 +137,13 @@ repair(Store, Item) ->
                         {Item#item.parent_sub, {unknown}}
                 end;
             {named, Name} ->
-                get_or_create_type(Store, Name, {undefined}),
-                {Item#item.parent_sub, {named, Name}};
+                Branch = get_or_create_type(Store, Name, {undefined}),
+                {Item#item.parent_sub, {branch, Branch}};
             {id, Id} ->
                 case get_item(Store, Id) of
                     {ok, Item} ->
                         case Item#item.content of
-                            {type, _} -> {Item#item.parent_sub, {id, Id}};
+                            {type, Branch} -> {Item#item.parent_sub, {branch, Branch}};
                             {deleted, _} -> {Item#item.parent_sub, {unknown}};
                             Other -> throw({"invalid parent", Id, Other})
                         end;
@@ -153,25 +154,19 @@ repair(Store, Item) ->
     put_item(Store, Item#item{parent = NewParent, parent_sub = NewParentSub}),
     ok.
 
--spec put_type(store(), binary()) -> true.
-put_type(Store, Name) ->
-    types:put(Store#store.types, Name),
-    true.
+-spec put_type(store(), binary(), types:branch_ptr()) -> true.
+put_type(Store, Name, Type) ->
+    types:put(Store#store.types, Name, Type).
 
--spec get_or_create_type(store(), binary(), type_ref:type_ref()) -> types:branch().
+-spec get_or_create_type(store(), binary(), type_ref:type_ref()) -> types:branch_ptr().
 get_or_create_type(Store, Name, TypeRef) ->
-    Branch0 =
-        case types:get(Store#store.types, Name) of
-            {ok, _} -> node_registry:get_by(Store#store.node_registry, Name);
-            undefined -> undefined
-        end,
-    case Branch0 of
+    case types:get(Store#store.types, Name) of
         {ok, Branch} ->
             Branch;
         undefined ->
-            Branch1 = branch:new_branch(TypeRef),
-            Branch2 = Branch1#branch{name = {ok, Name}},
-            put_branch(Store, Branch2),
-            put_type(Store, Name),
+            Branch0 = branch:new_branch(TypeRef),
+            Branch1 = Branch0#branch{name = {ok, Name}},
+            put_branch(Store, Branch1),
+            put_type(Store, Name, Branch1),
             Branch1
     end.
