@@ -54,7 +54,7 @@ get(BlockStore, #id{client = Client, clock = Clock}) ->
 -spec get_item(block_store(), id:id()) -> option:option(item:item()).
 get_item(Store, Id) ->
     case get(Store, Id) of
-        {ok, {item, Item}} -> {ok, Item};
+        {ok, {block, Item}} -> {ok, Item};
         undefined -> undefined
     end.
 
