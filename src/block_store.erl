@@ -22,11 +22,11 @@
 -opaque client_block_list() :: ets:table().
 
 -spec new() -> block_store().
-new() -> ets:new(block_store, [ordered_set, {keypos, #block_store_item.client}]).
+new() -> ets:new(block_store, [public, set, {keypos, #block_store_item.client}]).
 
 -spec add_client(block_store(), state_vector:client_id()) -> client_block_list().
 add_client(BlockStore, Client) ->
-    Table = ets:new(client_block_list, [set, {keypos, #client_block.start}]),
+    Table = ets:new(client_block_list, [public, ordered_set, {keypos, #client_block.start}]),
     ets:insert(BlockStore, #block_store_item{
         client = Client, table = Table
     }),
@@ -40,14 +40,14 @@ get_client(BlockStore, Client) ->
     end.
 
 -spec get(block_store(), id:id()) -> option:option(block:block_cell()).
-get(BlockStore, #id{client = Client} = Key) ->
+get(BlockStore, #id{client = Client, clock = Clock}) ->
     case ets:lookup(BlockStore, Client) of
         [] ->
             undefined;
         [#block_store_item{table = ClientBlockList}] ->
-            case ets:lookup(ClientBlockList, Key) of
-                [] -> undefined;
-                [{_, Block}] -> {ok, Block}
+            case find_pivot(ClientBlockList, Clock) of
+                undefined -> undefined;
+                {ok, {_, Block}} -> {ok, Block}
             end
     end.
 
@@ -104,7 +104,7 @@ get_clock(BlockStore, Client) ->
 
 -spec find_pivot(client_block_list(), integer()) -> option:option({integer(), block:block_cell()}).
 find_pivot(Table, Clock) ->
-    case ets:prev(Table, {Clock + 1}) of
+    case ets:prev(Table, Clock + 1) of
         Key when is_integer(Key) ->
             case ets:lookup(Table, Key) of
                 [] ->

@@ -1,9 +1,9 @@
 -module(branch).
 
--export([new_branch/1]).
+-export([new_branch/1, get_type_ptr/1]).
 -export_type([branch/0]).
 
--include("../include/branch.hrl").
+-include("../include/records.hrl").
 
 -type branch() :: #branch{}.
 
@@ -18,3 +18,15 @@ new_branch(TypeRef) ->
         content_len = 0,
         type_ref = TypeRef
     }.
+
+-spec get_type_ptr(branch()) -> type_ptr:type_ptr().
+get_type_ptr(Branch) ->
+    case Branch#branch.item of
+        undefined ->
+            case Branch#branch.name of
+                {ok, Name} -> {named, Name};
+                undefined -> throw("branch has no key")
+            end;
+        {ok, Id} ->
+            {id, Id}
+    end.
