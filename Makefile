@@ -6,3 +6,5 @@ check:
 	elp eqwalize-all | tee /dev/stderr | grep -q 'NO ERRORS'
 	rebar3 eunit
 
+test:
+	rebar3 eunit
