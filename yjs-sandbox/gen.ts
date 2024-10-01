@@ -49,5 +49,71 @@ const gen_test2 = () => {
   saveUpdate("test2-b", b);
 };
 
-gen_test1();
-gen_test2();
+const gen_test3 = () => {
+  const ydoc = new Y.Doc();
+  const ydoc0 = new Y.Doc();
+  const ydoc1 = new Y.Doc();
+  const ydoc2 = new Y.Doc();
+  const ydoc3 = new Y.Doc();
+
+  ydoc.clientID = 1000;
+  ydoc0.clientID = 2;
+  ydoc1.clientID = 1;
+  ydoc2.clientID = 3;
+  ydoc3.clientID = 4;
+
+  ydoc.getText("text").insert(0, "b");
+  const updateBaseStart = Y.encodeStateAsUpdate(ydoc);
+
+  ydoc.getText("text").insert(1, "end");
+  const updateBase = Y.encodeStateAsUpdate(ydoc);
+
+  ydoc0.transact(() => {
+    Y.applyUpdate(ydoc0, updateBaseStart);
+  });
+  ydoc0.getText("text").insert(1, "0");
+  const update0 = Y.encodeStateAsUpdate(ydoc0);
+
+  ydoc1.transact(() => {
+    Y.applyUpdate(ydoc1, updateBase);
+  });
+  ydoc1.getText("text").insert(1, "1");
+  const update1 = Y.encodeStateAsUpdate(ydoc1);
+
+  ydoc2.transact(() => {
+    Y.applyUpdate(ydoc2, updateBase);
+  });
+  ydoc2.getText("text").insert(1, "2");
+  const update2 = Y.encodeStateAsUpdate(ydoc2);
+
+  ydoc3.transact(() => {
+    Y.applyUpdate(ydoc3, updateBase);
+  });
+  ydoc3.getText("text").insert(1, "3");
+  const update3 = Y.encodeStateAsUpdate(ydoc3);
+
+  // b123end
+  ydoc2.transact(() => {
+    Y.applyUpdate(ydoc2, update1);
+    Y.applyUpdate(ydoc2, update3);
+  });
+  console.log(ydoc2.getText("text").toString());
+
+  console.log(`HERE!`);
+  ydoc2.getText("text").insert(2, "X");
+  ydoc2.transact(() => {
+    Y.applyUpdate(ydoc2, update0);
+  });
+
+  console.log(ydoc2.getText("text").toString());
+  //   let cur = ydoc2.getText("text")._start;
+  //   while (cur != undefined) {
+  //     const { doc, ...node } = cur;
+  //     console.log(`node:`, node);
+  //     cur = cur.right;
+  //   }
+};
+
+// gen_test1();
+// gen_test2();
+gen_test3();

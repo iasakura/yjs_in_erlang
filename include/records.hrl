@@ -11,3 +11,4 @@
 -include("./store.hrl").
 -include("./transaction.hrl").
 -include("./update.hrl").
+-include("./text.hrl").
