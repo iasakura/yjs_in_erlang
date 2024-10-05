@@ -16,6 +16,7 @@
 -export_type([store/0]).
 
 -include("../include/records.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -type store() :: #store{}.
 
@@ -99,59 +100,68 @@ get_state_vector(Store) ->
 push_gc(Store, Range) ->
     block_store:push_gc(Store#store.blocks, Range).
 
--spec repair(store(), item:item()) -> ok.
+-spec repair(store(), item:item()) -> item:item().
 repair(Store, Item) ->
-    case Item#item.origin of
-        {ok, Origin} ->
-            Left = block_store:get_item_clean_end(Store#store.blocks, Origin),
-            _ = option:map(fun(L) -> materialize(Store, L) end, Left),
-            ok;
-        undefined ->
-            ok
-    end,
-    case Item#item.right_origin of
-        {ok, OriginRight} ->
-            Right = block_store:get_item_clean_start(Store#store.blocks, OriginRight),
-            _ = option:map(fun(L) -> materialize(Store, L) end, Right),
-            ok;
-        undefined ->
-            ok
-    end,
+    NewLeft =
+        case Item#item.origin of
+            {ok, Origin} ->
+                Left = block_store:get_item_clean_end(Store#store.blocks, Origin),
+                option:map(fun(L) -> (materialize(Store, L))#item.id end, Left);
+            undefined ->
+                undefined
+        end,
+    NewRight =
+        case Item#item.right_origin of
+            {ok, OriginRight} ->
+                Right = block_store:get_item_clean_start(Store#store.blocks, OriginRight),
+                option:map(fun(L) -> (materialize(Store, L))#item.id end, Right);
+            undefined ->
+                undefined
+        end,
+    Item0 = Item#item{left = NewLeft, right = NewRight},
+    ?LOG_DEBUG("store: ~p", [block_store:get_all(Store#store.blocks)]),
+    ?LOG_DEBUG("Repairing: ~p", [Item0]),
 
     {NewParentSub, NewParent} =
-        case Item#item.parent of
+        case Item0#item.parent of
             {unknown} ->
-                case {Item#item.left, Item#item.right} of
+                case {Item0#item.left, Item0#item.right} of
                     {{ok, _} = Id, _} ->
+                        ?LOG_DEBUG("NewParent: ~p, NewParentSub: ~p", [Id, {unknown}]),
                         case util:get_item_from_link(Store, Id) of
-                            undefined -> {Item#item.parent_sub, {unknown}};
-                            {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
+                            undefined ->
+                                {Item0#item.parent_sub, {unknown}};
+                            {ok, LeftItem} ->
+                                ?LOG_DEBUG("NewParent: ~p, NewParentSub: ~p", [
+                                    LeftItem#item.parent, LeftItem#item.parent_sub
+                                ]),
+                                {LeftItem#item.parent_sub, LeftItem#item.parent}
                         end;
                     {_, {ok, _} = Id} ->
                         case util:get_item_from_link(Store, Id) of
-                            undefined -> {Item#item.parent_sub, {unknown}};
-                            {ok, Item} -> {Item#item.parent_sub, Item#item.parent}
+                            undefined -> {Item0#item.parent_sub, {unknown}};
+                            {ok, RightItem} -> {RightItem#item.parent_sub, RightItem#item.parent}
                         end;
                     {_, _} ->
-                        {Item#item.parent_sub, {unknown}}
+                        {Item0#item.parent_sub, {unknown}}
                 end;
             {named, Name} ->
                 get_or_create_type(Store, Name, {undefined}),
-                {Item#item.parent_sub, {named, Name}};
+                {Item0#item.parent_sub, {named, Name}};
             {id, Id} ->
                 case get_item(Store, Id) of
-                    {ok, Item} ->
-                        case Item#item.content of
-                            {type, _} -> {Item#item.parent_sub, {id, Id}};
-                            {deleted, _} -> {Item#item.parent_sub, {unknown}};
+                    {ok, ParentItem} ->
+                        case ParentItem#item.content of
+                            {type, _} -> {ParentItem#item.parent_sub, {id, Id}};
+                            {deleted, _} -> {ParentItem#item.parent_sub, {unknown}};
                             Other -> throw({"invalid parent", Id, Other})
                         end;
                     undefined ->
-                        {Item#item.parent_sub, {unknown}}
+                        {Item0#item.parent_sub, {unknown}}
                 end
         end,
-    put_item(Store, Item#item{parent = NewParent, parent_sub = NewParentSub}),
-    ok.
+    ?LOG_DEBUG("NewParent: ~p, NewParentSub: ~p", [NewParent, NewParentSub]),
+    put_item(Store, Item0#item{parent = NewParent, parent_sub = NewParentSub}).
 
 -spec put_type(store(), binary()) -> true.
 put_type(Store, Name) ->

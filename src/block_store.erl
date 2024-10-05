@@ -15,7 +15,6 @@
 ]).
 -export_type([block_store/0, client_block_list/0]).
 
--include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 
 -opaque block_store() :: ets:table().
@@ -159,7 +158,6 @@ get_all(BlockStore) ->
             #block_store_item{client = Client, table = Table} = X,
             ets:foldl(
                 fun(Y, Acc1) ->
-                    ?LOG_DEBUG("Y: ~p", [Y]),
                     #client_block{cell = BlockCell} = Y,
                     maps:put(Client, BlockCell, Acc1)
                 end,

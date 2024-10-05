@@ -164,6 +164,7 @@ integrate_(Item, Txn, Offset) ->
             {unknown} ->
                 throw("return true")
         end,
+    ?LOG_DEBUG("parent: ~p", [ParentOpt]),
 
     Left = get_item_from_link(Store, Item0#item.left),
     Right = get_item_from_link(Store, Item0#item.right),
@@ -195,7 +196,10 @@ integrate_(Item, Txn, Offset) ->
                     true ->
                         Item0
                 end,
+            ?LOG_DEBUG("item2: ~p", [Item2]),
+            ?LOG_DEBUG("store before: ~p", [block_store:get_all(Store#store.blocks)]),
             store:put_item(Store, Item2),
+            ?LOG_DEBUG("store after: ~p", [block_store:get_all(Store#store.blocks)]),
             Item3 = tweak_parent_sub(Store, Item2),
             reconnect_left_right(Txn, Parent, Item3),
             adjust_length_of_parent(Store, Parent, Item3),
@@ -506,7 +510,8 @@ splice(Store, Item, Offset) ->
                 id = #id{client = Client, clock = Clock + Offset},
                 len = item_content:len(Content2),
                 content = Content2,
-                left = {ok, Item#item.id}
+                left = {ok, Item#item.id},
+                origin = {ok, Item#item.id#id{clock = Clock + Offset - 1}}
             },
             New1 = Item#item{
                 content = Content1,

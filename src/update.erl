@@ -88,6 +88,7 @@ decode_block(Id, Bin) ->
             {{gc, #block_range{id = Id, len = Len}}, Rest0};
         Info ->
             CantCopyParentInfo = Info band (?HAS_RIGHT_ORIGIN bor ?HAS_ORIGIN) =:= 0,
+            ?LOG_DEBUG("Info: ~p, CantCopyParentInfo: ~p", [Info, CantCopyParentInfo]),
             {Origin, RestO} =
                 case Info band ?HAS_ORIGIN of
                     0 ->
@@ -214,6 +215,9 @@ integrate_loop(
     ?LOG_DEBUG(
         "CurBlock: ~p, CurTarget: ~p, ClientBlockIds: ~p, LocalSV: ~p, MissingSV: ~p, Remaining: ~p, UnappliedBlockStack: ~p",
         [CurBlock, CurTarget, ClientBlockIds, LocalSV, MissingSV, Remaining, UnappliedBlockStack]
+    ),
+    ?LOG_DEBUG(
+        "store: ~p", [block_store:get_all(Store#store.blocks)]
     ),
     case CurBlock of
         undefined ->
@@ -351,17 +355,18 @@ integrate_loop(
                                                 Client,
                                                 Id#id.clock + block_carrier_length(Block)
                                             ),
-                                            case Block of
-                                                {item, Item} ->
-                                                    store:repair(Store, Item);
-                                                _ ->
-                                                    ok
-                                            end,
-                                            ShouldDelete = bc_integrate(Block, Txn, Offset),
+                                            NewBlock =
+                                                case Block of
+                                                    {item, Item} ->
+                                                        {item, store:repair(Store, Item)};
+                                                    _ ->
+                                                        Block
+                                                end,
+                                            ShouldDelete = bc_integrate(NewBlock, Txn, Offset),
                                             DeleteItem =
                                                 case ShouldDelete of
                                                     true ->
-                                                        case Block of
+                                                        case NewBlock of
                                                             {item, I} -> {ok, I};
                                                             _ -> undefined
                                                         end;
@@ -369,14 +374,14 @@ integrate_loop(
                                                         undefined
                                                 end,
                                             DeleteItem2 =
-                                                case Block of
+                                                case NewBlock of
                                                     {item, Item2} ->
                                                         case Item2#item.parent of
                                                             {unknown} ->
                                                                 store:push_gc(Store, #block_range{
                                                                     id = Id,
                                                                     len = block_carrier_length(
-                                                                        Block
+                                                                        NewBlock
                                                                     )
                                                                 }),
                                                                 undefined;
@@ -395,7 +400,7 @@ integrate_loop(
                                                 _ ->
                                                     ok
                                             end,
-                                            {NewBlock, NewStack, NewTarget, NewClientBlockIds,
+                                            {NewBlock2, NewStack, NewTarget, NewClientBlockIds,
                                                 NewUpdate2} = next(
                                                 UnappliedBlockStack,
                                                 CurTarget,
@@ -405,7 +410,7 @@ integrate_loop(
                                             integrate_loop(
                                                 Txn,
                                                 NewUpdate2,
-                                                NewBlock,
+                                                NewBlock2,
                                                 NewTarget,
                                                 NewClientBlockIds,
                                                 NewLocalSV,

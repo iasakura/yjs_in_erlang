@@ -12,13 +12,13 @@ cleanup(_) -> ok.
 transition_test_() ->
     [
         {setup, fun setup/0, fun cleanup/1, [
-            %fun integrate_test_case1/0,
+            fun integrate_test_case0/0,
+            fun integrate_test_case1/0,
             fun integrate_test_case2/0
-            %fun integrate_test_case3/0
         ]}
     ].
 
-integrate_test_case1() ->
+integrate_test_case0() ->
     Doc = doc:new(),
     Txn = transaction:new(Doc),
     {Update, <<"">>} = update:decode_update(
@@ -29,7 +29,7 @@ integrate_test_case1() ->
     ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
     ok.
 
-integrate_test_case2() ->
+integrate_test_case1() ->
     {ok, BinaryContent} = file:read_file("tests/test1.bin"),
     Doc = doc:new(),
     Txn = transaction:new(Doc),
@@ -37,14 +37,14 @@ integrate_test_case2() ->
     transaction:apply_update(Txn, Update),
     ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
     Text = doc:get_or_create_text(Doc, <<"text">>),
+    ?LOG_DEBUG("text: ~p", [text:get_string(Text)]),
     ?assertEqual(
-        <<16#30, 16#42, 16#30, 16#44, 16#30, 16#46, 16#61, 16#62, 16#63, 16#30, 16#48, 16#30,
-            16#4a>>,
+        <<"あいうabcえお"/utf8>>,
         text:get_string(Text)
     ),
     ok.
 
-integrate_test_case3() ->
+integrate_test_case2() ->
     {ok, A} = file:read_file("tests/test2-a.bin"),
     {ok, B} = file:read_file("tests/test2-b.bin"),
     {UpdateA, <<"">>} = update:decode_update(A),
