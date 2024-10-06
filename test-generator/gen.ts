@@ -9,6 +9,7 @@ const saveUpdate = (testCaseName: string, update: Uint8Array) => {
 
 const gen_test1 = () => {
   const ydoc = new Y.Doc();
+  ydoc.clientID = 1;
   const ytext = ydoc.getText("text");
   ytext.insert(0, "あいうえお");
   ytext.insert(3, "abc");

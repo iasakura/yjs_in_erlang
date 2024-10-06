@@ -151,18 +151,22 @@ push_gc(Store, Range) ->
         end,
     ets:insert(Table, #client_block{start = Gc#gc.start, cell = {gc, Gc}}).
 
--spec get_all(block_store()) -> #{state_vector:client_id() => block:block_cell()}.
+-spec get_all(block_store()) -> #{state_vector:client_id() => #{integer() => block:block_cell()}}.
 get_all(BlockStore) ->
     ets:foldl(
         fun(X, Acc) ->
             #block_store_item{client = Client, table = Table} = X,
-            ets:foldl(
-                fun(Y, Acc1) ->
-                    #client_block{cell = BlockCell} = Y,
-                    maps:put(Client, BlockCell, Acc1)
-                end,
-                Acc,
-                Table
+            maps:put(
+                Client,
+                ets:foldl(
+                    fun(Y, Acc1) ->
+                        #client_block{start = S, cell = BlockCell} = Y,
+                        maps:put(S, BlockCell, Acc1)
+                    end,
+                    #{},
+                    Table
+                ),
+                Acc
             )
         end,
         #{},
