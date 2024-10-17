@@ -1,7 +1,7 @@
 y_erl
 =====
 
-An OTP application
+An Erlang port of yjs/yrs.
 
 Build
 -----
