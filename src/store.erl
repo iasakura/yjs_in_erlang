@@ -106,7 +106,9 @@ repair(Store, Item) ->
         case Item#item.origin of
             {ok, Origin} ->
                 Left = block_store:get_item_clean_end(Store#store.blocks, Origin),
-                option:map(fun(L) -> (materialize(Store, L))#item.id end, Left);
+                option:map(
+                    fun(L) -> item_ptr:new(Store, (materialize(Store, L))#item.id) end, Left
+                );
             undefined ->
                 undefined
         end,
@@ -114,7 +116,9 @@ repair(Store, Item) ->
         case Item#item.right_origin of
             {ok, OriginRight} ->
                 Right = block_store:get_item_clean_start(Store#store.blocks, OriginRight),
-                option:map(fun(L) -> (materialize(Store, L))#item.id end, Right);
+                option:map(
+                    fun(L) -> item_ptr:new(Store, (materialize(Store, L))#item.id) end, Right
+                );
             undefined ->
                 undefined
         end,
@@ -128,7 +132,7 @@ repair(Store, Item) ->
                 case {Item0#item.left, Item0#item.right} of
                     {{ok, _} = Id, _} ->
                         ?LOG_DEBUG("NewParent: ~p, NewParentSub: ~p", [Id, {unknown}]),
-                        case util:get_item_from_link(Store, Id) of
+                        case util:get_item_from_link(Id) of
                             undefined ->
                                 {Item0#item.parent_sub, {unknown}};
                             {ok, LeftItem} ->
@@ -138,7 +142,7 @@ repair(Store, Item) ->
                                 {LeftItem#item.parent_sub, LeftItem#item.parent}
                         end;
                     {_, {ok, _} = Id} ->
-                        case util:get_item_from_link(Store, Id) of
+                        case util:get_item_from_link(Id) of
                             undefined -> {Item0#item.parent_sub, {unknown}};
                             {ok, RightItem} -> {RightItem#item.parent_sub, RightItem#item.parent}
                         end;

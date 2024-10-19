@@ -1,5 +1,5 @@
 -record(branch, {
-    start :: option:option(id:id()),
+    start :: option:option(item_ptr:item_ptr()),
     map :: #{binary() => id:id()},
     item :: option:option(id:id()),
     name :: option:option(binary()),

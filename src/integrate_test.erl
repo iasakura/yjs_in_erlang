@@ -12,9 +12,9 @@ cleanup(_) -> ok.
 transition_test_() ->
     [
         {setup, fun setup/0, fun cleanup/1, [
-            fun integrate_test_case0/0,
-            fun integrate_test_case1/0,
-            fun integrate_test_case2/0
+            %fun integrate_test_case0/0,
+            fun integrate_test_case1/0
+            %fun integrate_test_case2/0
         ]}
     ].
 

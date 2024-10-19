@@ -1,13 +1,25 @@
 -module(util).
 
 -export([
-    get_item_from_link/2, compute_utf16_offset/2, compute_utf16_length/1, read_next_utf8_codepoint/1
+    get_item_from_link/1, get_item_from_link/2,
+    compute_utf16_offset/2,
+    compute_utf16_length/1,
+    read_next_utf8_codepoint/1
 ]).
 
 -spec get_item_from_link(store:store(), option:option(id:id())) -> option:option(item:item()).
 get_item_from_link(Store, Link) ->
     case Link of
         {ok, Id} -> store:get_item(Store, Id);
+        _ -> undefined
+    end.
+
+-spec get_item_from_link(option:option(item_ptr:item_ptr())) -> option:option(item:item()).
+get_item_from_link(ItemPtr) ->
+    maybe
+        {ok, Ptr} ?= ItemPtr,
+        item_ptr:get_view(Ptr)
+    else
         _ -> undefined
     end.
 

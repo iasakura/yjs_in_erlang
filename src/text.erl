@@ -11,13 +11,13 @@
 get_string(#y_text{store = Store, branch = Branch}) ->
     get_text(Branch#branch.start, Store, <<"">>).
 
--spec get_text(option:option(id:id()), store:store(), binary()) -> binary().
+-spec get_text(option:option(item_ptr:item_ptr()), store:store(), binary()) -> binary().
 get_text(Start, Store, Acc) ->
     case Start of
         undefined ->
             Acc;
         {ok, S} ->
-            case store:get_item(Store, S) of
+            case item_ptr:get_view(S) of
                 undefined ->
                     Acc;
                 {ok, Item} ->
