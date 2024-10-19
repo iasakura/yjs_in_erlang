@@ -1,7 +1,7 @@
-y_erl
+yjs_in_erlang
 =====
 
-An Erlang port of yjs/yrs.
+A pure Erlang implementation of Yjs/Yrs, created for learning. Not intended for production use.
 
 Build
 -----
