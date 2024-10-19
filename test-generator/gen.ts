@@ -123,5 +123,5 @@ const gen_test3 = () => {
 };
 
 gen_test1();
-// gen_test2();
-//gen_test3();
+gen_test2();
+gen_test3();
