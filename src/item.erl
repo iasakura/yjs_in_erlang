@@ -384,7 +384,9 @@ reconnect_left_right(Txn, Parent, This) ->
                         Loop(maps:get(ParentSub, Parent#branch.map, undefined));
                     _ ->
                         Start = Parent#branch.start,
-                        store:put_branch(Store, Parent#branch{start = {ok, item_ptr:new(Store, This#item.id)}}),
+                        store:put_branch(Store, Parent#branch{
+                            start = {ok, item_ptr:new(Store, This#item.id)}
+                        }),
                         Start
                 end,
             store:put_item(Store, This#item{
