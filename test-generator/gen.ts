@@ -18,6 +18,13 @@ const gen_test1 = () => {
 
   var x = Y.encodeStateAsUpdate(ydoc);
   saveUpdate("test1", x);
+
+  let cur = ydoc.getText("text")._start;
+  while (cur != undefined) {
+    const { doc, ...node } = cur;
+    console.log(`node:`, node);
+    cur = cur.right;
+  }
 };
 
 const gen_test2 = () => {

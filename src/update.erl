@@ -132,10 +132,10 @@ decode_block(Id, Bin) ->
             {Content, RestItem} = item_content:decode(RestPS, Info),
             Item = item:new_item(
                 Id,
-                undefined,
                 Origin,
-                undefined,
                 RightOrigin,
+                undefined,
+                undefined,
                 Parent,
                 ParentSub,
                 Content
@@ -585,7 +585,7 @@ missing({item, Item}, LocalSV) ->
                     undefined
             end,
         undefined ?=
-            case Item#item.right of
+            case Item#item.right_origin of
                 {ok, RightOrigin} ->
                     case
                         (RightOrigin#id.client =/= Item#item.id#id.client andalso

@@ -14,7 +14,6 @@
     % | {json, [json()]}
     % {embed, any_type()} |
     % | {format, string(), any_type()}
-    % wip: base16 encode
     | {string, binary()}
     | {type, branch:branch()}.
 % | {move, move()}.
