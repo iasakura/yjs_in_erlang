@@ -1,0 +1,15 @@
+{application, yjs_in_erlang_websocket,
+ [{description, "A Yjs WebSocket server."},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {yjs_in_erlang_websocket_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.

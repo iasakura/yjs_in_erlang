@@ -30,7 +30,7 @@ integrate_test_case0() ->
     ok.
 
 integrate_test_case1() ->
-    {ok, BinaryContent} = file:read_file("tests/test1.bin"),
+    {ok, BinaryContent} = file:read_file("apps/yjs_in_erlang/fixtures/test1.bin"),
     Doc = doc:new(),
     Txn = transaction:new(Doc),
     {Update, <<"">>} = update:decode_update(BinaryContent),
@@ -45,8 +45,8 @@ integrate_test_case1() ->
     ok.
 
 integrate_test_case2() ->
-    {ok, A} = file:read_file("tests/test2-a.bin"),
-    {ok, B} = file:read_file("tests/test2-b.bin"),
+    {ok, A} = file:read_file("apps/yjs_in_erlang/fixtures/test2-a.bin"),
+    {ok, B} = file:read_file("apps/yjs_in_erlang/fixtures/test2-b.bin"),
     {UpdateA, <<"">>} = update:decode_update(A),
     {UpdateB, <<"">>} = update:decode_update(B),
     Doc = doc:new(),
