@@ -1,6 +1,6 @@
 -module(update).
 
--export([new/0, decode_update/1, integrate/2, merge_update/1]).
+-export([new/0, decode_update/1, encode_update/1, integrate/2, merge_update/1]).
 -export_type([update/0, pending_update/0, delete_set/0, block_range/0]).
 
 -include("../include/records.hrl").
@@ -75,6 +75,10 @@ bc_integrate({skip, _Range}, _Txn, _Offset) -> throw("wip: range.integrate").
 % -spec encode_delete_set(delete_set()) -> binary().
 % encode_delete_set(DeleteSet) ->
 %     encode_id_set(DeleteSet).
+
+-spec encode_update(update()) -> binary().
+encode_update(_Update) ->
+    throw("TODO: Not implemented").
 
 -spec decode_block(id:id(), binary()) -> {block_carrier(), binary()}.
 decode_block(Id, Bin) ->
