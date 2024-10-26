@@ -56,7 +56,7 @@ encode_update_test_case1() ->
     Update = #update{
         update_blocks = #{
             2026372272 =>
-            [
+                [
                     {item, #item{
                         id = #id{client = 2026372272, clock = 0},
                         len = 1,
