@@ -13,4 +13,4 @@ encode_uint(N) -> encode_uint(N, <<>>).
 decode_uint(<<I:8, Rest/binary>>) when I < 2#10000000 -> {I, Rest};
 decode_uint(<<I:8, Rest/binary>>) when I >= 2#10000000 ->
     {N, Rest1} = decode_uint(Rest),
-    {I band 2#01111111 + N bsl 7, Rest1}.
+    {(I band 2#01111111) bor (N bsl 7), Rest1}.

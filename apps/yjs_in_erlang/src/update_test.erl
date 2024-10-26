@@ -24,10 +24,10 @@ decode_update_test_case1() ->
         % eqwalizer:ignore Unbound rec: update
         #update{
             update_blocks = #{
-                20736530432 =>
+                2026372272 =>
                     [
                         {item, #item{
-                            id = #id{client = 20736530432, clock = 0},
+                            id = #id{client = 2026372272, clock = 0},
                             len = 1,
                             left = undefined,
                             right = undefined,
