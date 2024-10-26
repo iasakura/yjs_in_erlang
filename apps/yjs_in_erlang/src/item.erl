@@ -1,6 +1,15 @@
 -module(item).
 
--export([new_item/8, integrate/3, len/1, is_deleted/1, splice/3, is_countable/1, content_len/1]).
+-export([
+    new_item/8,
+    integrate/3,
+    len/1,
+    is_deleted/1,
+    splice/3,
+    is_countable/1,
+    content_len/1,
+    encode_info/1
+]).
 -export_type([item/0]).
 
 -import(util, [get_item_from_link/1, get_item_from_link/2]).
@@ -486,7 +495,7 @@ integrate_content(TransactionMut, Item) ->
     end.
 
 -spec check_deleted(store:store(), branch:branch(), item:item()) -> boolean().
-check_deleted(Store, Parent, Item) ->
+check_deleted(_Store, Parent, Item) ->
     ParentDeleted =
         case Parent of
             {branch, Branch} ->
@@ -544,3 +553,25 @@ splice(Store, Item, Offset) ->
             end,
             {ok, {New1, New2}}
     end.
+
+-spec encode_info(item:item()) -> binary().
+encode_info(Item) ->
+    HasOrigin =
+        case option:is_some(Item#item.origin) of
+            true -> ?HAS_ORIGIN;
+            false -> 0
+        end,
+    HasRightOrigin =
+        case option:is_some(Item#item.right_origin) of
+            true -> ?HAS_RIGHT_ORIGIN;
+            false -> 0
+        end,
+    HasParentSub =
+        case option:is_some(Item#item.parent_sub) of
+            true -> ?HAS_PARENT_SUB;
+            false -> 0
+        end,
+    RefNumber = item_content:get_ref_number(Item#item.content),
+    <<
+        (HasOrigin bor HasRightOrigin bor HasParentSub bor RefNumber):8
+    >>.

@@ -38,10 +38,15 @@ websocket_init(Doc) -> {ok, Doc}.
     websocket_connection_manager:ws_shared_doc()
 ) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
-websocket_handle({binary, Msg}, Doc) ->
+% 0 means syncMessage
+websocket_handle({binary, <<0:8, Msg/binary>>}, Doc) ->
     {YMsg, _} = protocol:decode_sync_message(Msg),
     Msgs = message_handler:handle_msg(YMsg, Doc),
     {Msgs, Doc};
+% 0 means awarenessMessage
+websocket_handle({binary, <<1:8, _>>}, Doc) ->
+    % TODO: implement
+    {[], Doc};
 websocket_handle(_, Doc) ->
     {[], Doc}.
 

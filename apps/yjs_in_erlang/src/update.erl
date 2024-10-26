@@ -50,35 +50,70 @@ bc_integrate({item, Item}, Txn, Offset) -> item:integrate(Item, Txn, Offset);
 bc_integrate({gc, _Range}, _Txn, _Offset) -> throw("wip: range.integrate");
 bc_integrate({skip, _Range}, _Txn, _Offset) -> throw("wip: range.integrate").
 
-% -spec encode_ranges(ranges()) -> binary().
-% encode_ranges(Ranges) ->
-%     L = length(Ranges),
-%     lists:foldl(
-%         fun({Start, End}, Acc) ->
-%             <<(var_int:encode_uint(Start))/binary, (var_int:encode_uint(End))/binary, Acc/binary>>
-%         end,
-%         var_int:encode_uint(L),
-%         Ranges
-%     ).
-
-% -spec encode_id_set(id_set()) -> binary().
-% encode_id_set(IdSet) ->
-%     N = maps:size(IdSet),
-%     maps:fold(
-%         fun(ClientId, Ranges, Acc) ->
-%             <<(var_int:encode_uint(ClientId))/binary, (encode_ranges(Ranges))/binary, Acc/binary>>
-%         end,
-%         <<(var_int:encode_uint(N))/binary>>,
-%         IdSet
-%     ).
-
-% -spec encode_delete_set(delete_set()) -> binary().
-% encode_delete_set(DeleteSet) ->
-%     encode_id_set(DeleteSet).
-
 -spec encode_update(update()) -> binary().
-encode_update(_Update) ->
-    throw("TODO: Not implemented").
+encode_update(Update) ->
+    LenBin = maps:size(Update#update.update_blocks),
+    UpdateBins = [
+        <<
+            (var_int:encode_uint(length(UpdateBlocks)))/binary,
+            (state_vector:encode_client_id(ClientId))/binary,
+            % TODO: offsetはstate vectorを指定したときに使うと全部のIDに加算されるのでクロックを小さくすることができてサイズが小さくなる
+            % 今回は0でいいんじゃないかな。
+            (var_int:encode_uint(0))/binary,
+            (encode_update_blocks(UpdateBlocks))/binary
+        >>
+     || {ClientId, UpdateBlocks} <- maps:to_list(Update#update.update_blocks)
+    ],
+    UpdateBin = list_to_binary(UpdateBins),
+    DeleteSetBin = id_set:encode_id_set(Update#update.delete_set),
+    <<(var_int:encode_uint(LenBin))/binary, UpdateBin/binary, DeleteSetBin/binary>>.
+
+-spec encode_update_blocks([block_carrier()]) -> binary().
+encode_update_blocks(Blocks) ->
+    BlockBins = [
+        <<(encode_block(Block))/binary>>
+     || Block <- Blocks
+    ],
+    <<(list_to_binary(BlockBins))/binary>>.
+
+-spec encode_block(block_carrier()) -> binary().
+encode_block({skip, #block_range{len = Len}}) ->
+    Info = ?BLOCK_SKIP_REF_NUMBER,
+    <<Info:8, (var_int:encode_uint(Len))/binary>>;
+encode_block({gc, #block_range{len = Len}}) ->
+    Info = ?BLOCK_GC_REF_NUMBER,
+    <<Info:8, (var_int:encode_uint(Len))/binary>>;
+encode_block({item, Item}) ->
+    Info = item:encode_info(Item),
+    OriginBin =
+        case Item#item.origin of
+            {ok, Origin} -> id:encode_id(Origin);
+            _ -> <<>>
+        end,
+    RightOriginBin =
+        case Item#item.right_origin of
+            {ok, RightOrigin} -> id:encode_id(RightOrigin);
+            _ -> <<>>
+        end,
+    ParentBin =
+        case {Item#item.origin, Item#item.right_origin} of
+            {undefined, undefined} ->
+                case Item#item.parent of
+                    {unknown} -> <<>>;
+                    {named, Name} -> <<1:8, (binary_encoding:encode_string(Name))/binary>>;
+                    {id, Pid} -> id:encode_id(Pid)
+                end;
+            _ ->
+                <<>>
+        end,
+    ParentSubBin =
+        case Item#item.parent_sub of
+            {ok, ParentSub} -> binary_encoding:encode_string(ParentSub);
+            _ -> <<>>
+        end,
+    ContentBin = item_content:encode(Item#item.content),
+    <<Info/binary, OriginBin/binary, RightOriginBin/binary, ParentBin/binary, ParentSubBin/binary,
+        ContentBin/binary>>.
 
 -spec decode_block(id:id(), binary()) -> {block_carrier(), binary()}.
 decode_block(Id, Bin) ->
@@ -98,7 +133,7 @@ decode_block(Id, Bin) ->
                     0 ->
                         {undefined, Rest};
                     _ ->
-                        {Id2, RestId} = id:read_id(Rest),
+                        {Id2, RestId} = id:decode_id(Rest),
                         {{ok, Id2}, RestId}
                 end,
             {RightOrigin, RestRO} =
@@ -106,7 +141,7 @@ decode_block(Id, Bin) ->
                     0 ->
                         {undefined, RestO};
                     _ ->
-                        {Id3, RestId2} = id:read_id(RestO),
+                        {Id3, RestId2} = id:decode_id(RestO),
                         {{ok, Id3}, RestId2}
                 end,
             {Parent, RestPA} =
@@ -114,10 +149,10 @@ decode_block(Id, Bin) ->
                     true ->
                         case var_int:decode_uint(RestRO) of
                             {1, RestPI} ->
-                                {Name, RestName} = binary_encoding:read_string(RestPI),
+                                {Name, RestName} = binary_encoding:decode_string(RestPI),
                                 {{named, Name}, RestName};
                             {_, RestPI} ->
-                                {Pid, RestPID} = id:read_id(RestPI),
+                                {Pid, RestPID} = id:decode_id(RestPI),
                                 {{id, Pid}, RestPID}
                         end;
                     _ ->
@@ -126,7 +161,7 @@ decode_block(Id, Bin) ->
             {ParentSub, RestPS} =
                 if
                     CantCopyParentInfo and ((Info band ?HAS_PARENT_SUB) =/= 0) ->
-                        {PSub, RestPSub} = binary_encoding:read_string(RestPA),
+                        {PSub, RestPSub} = binary_encoding:decode_string(RestPA),
                         {{ok, PSub}, RestPSub};
                     true ->
                         {undefined, RestPA}

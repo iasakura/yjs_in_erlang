@@ -14,5 +14,5 @@ is_none(undefined) -> true;
 is_none(_) -> false.
 
 -spec is_some(option(_)) -> boolean().
-is_some(undefined) -> true;
-is_some(_) -> false.
+is_some(undefined) -> false;
+is_some(_) -> true.
