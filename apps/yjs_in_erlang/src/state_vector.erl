@@ -5,6 +5,7 @@
 -export_type([client_id/0, state_vector/0]).
 -export([
     new/0,
+    encode_client_id/1,
     encode_state_vector/1,
     decode_state_vector/1,
     set_min/3,
@@ -22,6 +23,9 @@ new() -> #{}.
 
 -spec integer_to_client_id(integer()) -> client_id().
 integer_to_client_id(N) when N >= 0 -> N.
+
+-spec encode_client_id(client_id()) -> binary().
+encode_client_id(Id) -> var_int:encode_uint(Id).
 
 -spec encode_state_vector(state_vector()) -> binary().
 encode_state_vector(SV) ->

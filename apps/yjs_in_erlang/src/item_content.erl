@@ -1,9 +1,10 @@
 -module(item_content).
 
--export([countable/1, decode/2, len/1, split/2]).
+-export([countable/1, decode/2, encode/1, len/1, split/2, get_ref_number/1]).
 -export_type([item_content/0]).
 
 -include("../include/constants.hrl").
+-include("../include/records.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 -type item_content() ::
@@ -38,13 +39,13 @@ decode(Bin, RefNum) ->
     ?LOG_DEBUG("RefNum: ~p", [RefNum]),
     case RefNum band 2#1111 of
         ?BLOCK_ITEM_BINARY_REF_NUMBER ->
-            {Buf, Rest} = binary_encoding:read_buf(Bin),
+            {Buf, Rest} = binary_encoding:decode_buf(Bin),
             {{binary, Buf}, Rest};
         ?BLOCK_ITEM_DELETED_REF_NUMBER ->
             {Len, Rest} = var_int:decode_uint(Bin),
             {{deleted, Len}, Rest};
         ?BLOCK_ITEM_STRING_REF_NUMBER ->
-            {Buf, Rest} = binary_encoding:read_string(Bin),
+            {Buf, Rest} = binary_encoding:decode_string(Bin),
             {{string, Buf}, Rest};
         ?BLOCK_ITEM_TYPE_REF_NUMBER ->
             {TypeRef, Rest} = type_ref:decode_type_ref(Bin),
@@ -64,6 +65,20 @@ decode(Bin, RefNum) ->
             {{any, Values}, Rest1}
     end.
 
+-spec encode(item_content()) -> binary().
+encode({binary, Bin}) ->
+    binary_encoding:encode_buf(Bin);
+encode({deleted, Len}) ->
+    var_int:encode_uint(Len);
+encode({string, Str}) ->
+    binary_encoding:encode_string(Str);
+encode({type, Type}) ->
+    type_ref:encode_type_ref(Type#branch.type_ref);
+encode({any, Values}) ->
+    Len = length(Values),
+    ValueBins = [any:encode_any(Value) || Value <- Values],
+    <<(var_int:encode_uint(Len))/binary, (list_to_binary(ValueBins))/binary>>.
+
 -spec split(item_content(), integer()) -> option:option({item_content(), item_content()}).
 split({any, Value}, Offset) ->
     {Left, Right} = lists:split(Offset, Value),
@@ -80,3 +95,10 @@ split({deleted, Len}, Offset) ->
     end;
 split(_, _) ->
     undefined.
+
+-spec get_ref_number(item_content()) -> integer().
+get_ref_number({binary, _}) -> ?BLOCK_ITEM_BINARY_REF_NUMBER;
+get_ref_number({deleted, _}) -> ?BLOCK_ITEM_DELETED_REF_NUMBER;
+get_ref_number({string, _}) -> ?BLOCK_ITEM_STRING_REF_NUMBER;
+get_ref_number({type, _}) -> ?BLOCK_ITEM_TYPE_REF_NUMBER;
+get_ref_number({any, _}) -> ?BLOCK_ITEM_ANY_REF_NUMBER.

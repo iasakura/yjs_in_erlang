@@ -3,14 +3,8 @@
 -export([encode_uint/1, decode_uint/1]).
 
 -spec encode_uint(integer(), binary()) -> binary().
-encode_uint(N, Acc) ->
-    case N < 2#10000000 of
-        true ->
-            <<Acc/binary, N:8>>;
-        false ->
-            I = N band 2#01111111,
-            encode_uint(N bsr 7, <<Acc/binary, (I bor 2#10000000):8>>)
-    end.
+encode_uint(N, Acc) when N < 2#10000000 -> <<Acc/binary, N:8>>;
+encode_uint(N, Acc) -> encode_uint(N bsr 7, <<Acc/binary, ((N band 2#01111111) bor 2#10000000):8>>).
 
 -spec encode_uint(integer()) -> binary().
 encode_uint(N) -> encode_uint(N, <<>>).

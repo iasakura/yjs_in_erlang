@@ -1,6 +1,6 @@
 -module(id_set).
 
--export([new/0, insert/3, decode_id_set/1, merge_id_set/2, id_range_to_list/1]).
+-export([new/0, insert/3, encode_id_set/1, decode_id_set/1, merge_id_set/2, id_range_to_list/1]).
 
 -export_type([id_set/0]).
 
@@ -61,6 +61,22 @@ insert(IdSet, Id, Len) ->
         IdSet
     ).
 
+-spec encode_id_range(id_range()) -> binary().
+encode_id_range({continuous, R}) ->
+    LenBin = var_int:encode_uint(1),
+    RBin = range:encode_range(R),
+    <<LenBin/binary, RBin/binary>>;
+encode_id_range({fragmented, Ranges}) ->
+    LenBin = var_int:encode_uint(length(Ranges)),
+    RangesBin = lists:foldl(
+        fun(R, Acc) ->
+            <<Acc/binary, (range:encode_range(R))/binary>>
+        end,
+        <<>>,
+        Ranges
+    ),
+    <<LenBin/binary, RangesBin/binary>>.
+
 -spec decode_id_range(binary()) -> {id_range(), binary()}.
 decode_id_range(Bin) ->
     {Len, Bin0} = var_int:decode_uint(Bin),
@@ -80,6 +96,19 @@ decode_id_range(Bin) ->
             end,
             Rec(Len, Bin0, [])
     end.
+
+-spec encode_id_set(id_set()) -> binary().
+encode_id_set(IdSet) ->
+    LenBin = var_int:encode_uint(maps:size(IdSet)),
+    Bin = maps:fold(
+        fun(ClientId, Ranges, Acc) ->
+            <<Acc/binary, (state_vector:encode_client_id(ClientId))/binary,
+                (encode_id_range(Ranges))/binary>>
+        end,
+        <<>>,
+        IdSet
+    ),
+    <<LenBin/binary, Bin/binary>>.
 
 -spec decode_id_set(binary()) -> {id_set:id_set(), binary()}.
 decode_id_set(Bin) ->

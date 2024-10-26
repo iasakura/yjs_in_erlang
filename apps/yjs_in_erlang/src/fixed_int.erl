@@ -1,6 +1,6 @@
 -module(fixed_int).
 
--export([read_u8/1, read_f32/1, read_f64/1, read_i64/1]).
+-export([read_u8/1, read_f32/1, read_f64/1, read_i64/1, write_f32/1, write_i64/1]).
 
 -spec read_u8(binary()) -> {integer(), binary()}.
 read_u8(<<I:8, Rest/binary>>) -> {I, Rest}.
@@ -9,6 +9,9 @@ read_u8(<<I:8, Rest/binary>>) -> {I, Rest}.
 read_f32(<<Float:32/float-big, Rest/binary>>) ->
     {Float, Rest}.
 
+-spec write_f32(float()) -> binary().
+write_f32(Float) -> <<Float:32/float-big>>.
+
 -spec read_f64(binary()) -> {float(), binary()}.
 read_f64(<<Float:64/float-big, Rest/binary>>) ->
     {Float, Rest}.
@@ -16,3 +19,6 @@ read_f64(<<Float:64/float-big, Rest/binary>>) ->
 -spec read_i64(binary()) -> {integer(), binary()}.
 read_i64(<<Int:64/integer-big, Rest/binary>>) ->
     {Int, Rest}.
+
+-spec write_i64(integer()) -> binary().
+write_i64(Int) -> <<Int:64/integer-big>>.

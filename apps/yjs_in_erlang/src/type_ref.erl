@@ -1,6 +1,6 @@
 -module(type_ref).
 
--export([decode_type_ref/1]).
+-export([decode_type_ref/1, encode_type_ref/1]).
 -export_type([type_ref/0]).
 
 -include("../include/constants.hrl").
@@ -43,7 +43,7 @@ decode_type_ref(Bin) ->
         {?TYPE_REFS_TEXT, Rest} ->
             {{text}, Rest};
         {?TYPE_REFS_XML_ELEMENT, Rest} ->
-            {Buf, Rest1} = binary_encoding:read_string(Rest),
+            {Buf, Rest1} = binary_encoding:decode_string(Rest),
             {{xml_element, Buf}, Rest1};
         {?TYPE_REFS_XML_FRAGMENT, Rest} ->
             {{xml_fragment}, Rest};
@@ -56,3 +56,26 @@ decode_type_ref(Bin) ->
         {?TYPE_REFS_UNDEFINED, Rest} ->
             {{undefined}, Rest}
     end.
+
+-spec encode_type_ref(type_ref()) -> binary().
+encode_type_ref({array}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_ARRAY))/binary>>;
+encode_type_ref({map}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_MAP))/binary>>;
+encode_type_ref({text}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_TEXT))/binary>>;
+encode_type_ref({xml_element, Buf}) ->
+    <<
+        (var_int:encode_uint(?TYPE_REFS_XML_ELEMENT))/binary,
+        (binary_encoding:encode_string(Buf))/binary
+    >>;
+encode_type_ref({xml_fragment}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_XML_FRAGMENT))/binary>>;
+encode_type_ref({xml_hook}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_XML_HOOK))/binary>>;
+encode_type_ref({xml_text}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_XML_TEXT))/binary>>;
+encode_type_ref({sub_doc}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_DOC))/binary>>;
+encode_type_ref({undefined}) ->
+    <<(var_int:encode_uint(?TYPE_REFS_UNDEFINED))/binary>>.
