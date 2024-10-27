@@ -10,19 +10,31 @@
 
 -spec encode_sync_message(sync_messages()) -> binary().
 encode_sync_message({sync_step1, StateVector}) ->
-    <<0:8, (state_vector:encode_state_vector(StateVector))/binary>>;
+    SVBin = state_vector:encode_state_vector(StateVector),
+    Len = byte_size(SVBin),
+    <<0:8, 0:8, (var_int:encode_uint(Len))/binary, SVBin/binary>>;
 encode_sync_message({sync_step2, Update}) ->
-    <<1:8, (update:encode_update(Update))/binary>>;
+    UpdateBin = update:encode_update(Update),
+    Len = byte_size(UpdateBin),
+    <<0:8, 1:8, (var_int:encode_uint(Len))/binary, UpdateBin/binary>>;
 encode_sync_message({update, Update}) ->
-    <<2:8, (update:encode_update(Update))/binary>>.
+    UpdateBin = update:encode_update(Update),
+    Len = byte_size(UpdateBin),
+    <<0:8, 2:8, (var_int:encode_uint(Len))/binary, UpdateBin/binary>>.
 
 -spec decode_sync_message(binary()) -> {sync_messages(), binary()}.
 decode_sync_message(<<0:8, Bin/binary>>) ->
-    {StateVector, Rest} = state_vector:decode_state_vector(Bin),
-    {{sync_step1, StateVector}, Rest};
+    {Len, Rest0} = var_int:decode_uint(Bin),
+    Buf = binary:part(Rest0, 0, Len),
+    {StateVector, _} = state_vector:decode_state_vector(Buf),
+    {{sync_step1, StateVector}, Rest0};
 decode_sync_message(<<1:8, Bin/binary>>) ->
-    {Update, Rest} = update:decode_update(Bin),
-    {{sync_step2, Update}, Rest};
+    {Len, Rest0} = var_int:decode_uint(Bin),
+    Buf = binary:part(Rest0, 0, Len),
+    {Update, _} = update:decode_update(Buf),
+    {{sync_step2, Update}, Rest0};
 decode_sync_message(<<2:8, Bin/binary>>) ->
-    {Update, Rest} = update:decode_update(Bin),
-    {{update, Update}, Rest}.
+    {Len, Rest0} = var_int:decode_uint(Bin),
+    Buf = binary:part(Rest0, 0, Len),
+    {Update, _} = update:decode_update(Buf),
+    {{update, Update}, Rest0}.

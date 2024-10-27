@@ -21,7 +21,7 @@
 -opaque client_block_list() :: ets:table().
 
 -spec new() -> block_store().
-new() -> ets:new(block_store, [public, set, {keypos, #block_store_item.client}]).
+new() -> ets:new(block_store, [public, ordered_set, {keypos, #block_store_item.client}]).
 
 -spec add_client(block_store(), state_vector:client_id()) -> client_block_list().
 add_client(BlockStore, Client) ->

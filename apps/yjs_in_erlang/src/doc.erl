@@ -22,6 +22,65 @@ get_or_create_text(Doc, Str) ->
 transact_mut(Doc) ->
     transaction:new(Doc).
 
+% TODO: use StateVector for not to send redundant data
 -spec get_update(doc(), state_vector:state_vector()) -> update:update().
-get_update(_Doc, _StateVector) ->
-    throw("TODO: Not implemnted").
+get_update(Doc, _StateVector) ->
+    Store = Doc#doc.store,
+    Blocks = Store#store.blocks,
+    AllBlocksMap = block_store:get_all(Blocks),
+    UpdateBlocks = maps:map(
+        fun(ClientId, BS) ->
+            lists:map(
+                fun({_K, V}) ->
+                    case V of
+                        {block, B} ->
+                            {item, B};
+                        {gc, G} ->
+                            {gc, #block_range{
+                                id = #id{
+                                    client = ClientId,
+                                    clock = G#gc.start
+                                },
+                                len = G#gc.end_ - G#gc.start
+                            }}
+                    end
+                end,
+                maps:to_list(BS)
+            )
+        end,
+        AllBlocksMap
+    ),
+    DeleteSet = maps:map(
+        fun(ClientId, BS) ->
+            lists:foldl(
+                fun({_K, V}, Acc) ->
+                    case V of
+                        {block, Item} ->
+                            case item:is_deleted(Item) of
+                                true ->
+                                    id_set:insert(Acc, Item#item.id, Item#item.len);
+                                false ->
+                                    Acc
+                            end;
+                        {gc, G} ->
+                            id_set:insert(
+                                Acc,
+                                #id{
+                                    client = ClientId,
+                                    clock = G#gc.start
+                                },
+                                G#gc.end_ - G#gc.start
+                            )
+                    end
+                end,
+                id_set:new(),
+                maps:to_list(BS)
+            )
+        end,
+        AllBlocksMap
+    ),
+    % eqwalizer:ignore: Unbound rec: update
+    #update{
+        update_blocks = UpdateBlocks,
+        delete_set = DeleteSet
+    }.
