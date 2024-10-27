@@ -24,7 +24,7 @@ init(Req, Manager) ->
             {ok, Req1, <<>>};
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
-            ?LOG_DEBUG("Create or get the room room: ~p from ~p~n", [Room, PeerAddress, PeerPort]),
+            ?LOG_DEBUG("Create or get the room room: ~p from ~p~n", [Room, PeerAddress]),
             Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
             {cowboy_websocket, Req, Doc}
     end.
@@ -40,6 +40,7 @@ websocket_init(Doc) -> {ok, Doc}.
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
 % 0 means syncMessage
 websocket_handle({binary, <<0:8, Msg/binary>>}, Doc) ->
+    ?LOG_DEBUG("syncMessage: ~p", [Msg]),
     {YMsg, _} = protocol:decode_sync_message(Msg),
     Msgs = message_handler:handle_msg(YMsg, Doc),
     {Msgs, Doc};

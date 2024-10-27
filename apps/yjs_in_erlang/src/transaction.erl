@@ -45,9 +45,9 @@ new_state(Doc) ->
 transaction_loop(State) ->
     receive
         {Pid, apply_delete, Txn, DeleteSet} ->
-            DeleteSet = internal_apply_delete(State, DeleteSet),
-            ?LOG_DEBUG("DeleteSet: ~p", [DeleteSet]),
-            Pid ! {Txn, DeleteSet},
+            DeleteSet0 = internal_apply_delete(State, DeleteSet),
+            ?LOG_DEBUG("DeleteSet: ~p", [DeleteSet0]),
+            Pid ! {Txn, DeleteSet0},
             transaction_loop(State);
         {Pid, add_changed_type, Txn, Parent, ParentSub} ->
             NewState = internal_add_changed_type(State, Parent, ParentSub),

@@ -1,6 +1,7 @@
 -module(state_vector).
 
 -include("../include/records.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export_type([client_id/0, state_vector/0]).
 -export([
@@ -44,6 +45,7 @@ encode_state_vector(SV) ->
 
 -spec decode_state_vector(binary()) -> {state_vector(), binary()}.
 decode_state_vector(Bin) ->
+    ?LOG_DEBUG("Bin: ~p", [Bin]),
     {Len, Bin0} = var_int:decode_uint(Bin),
     Rec = fun Rec(N, Bin1, Acc) ->
         case N of

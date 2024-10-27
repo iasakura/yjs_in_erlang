@@ -16,7 +16,7 @@
 -record(types_entry, {name :: binary()}).
 
 -spec new() -> types().
-new() -> ets:new(types, [public, set, {keypos, #types_entry.name}]).
+new() -> ets:new(types, [public, ordered_set, {keypos, #types_entry.name}]).
 
 -spec put(types(), binary()) -> true.
 put(Types, Name) -> ets:insert(Types, #types_entry{name = Name}).

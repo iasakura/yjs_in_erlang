@@ -5,7 +5,8 @@
   {mod, {yjs_in_erlang_websocket_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    cowboy
    ]},
   {env,[]},
   {modules, []},

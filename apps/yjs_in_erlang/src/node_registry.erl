@@ -8,7 +8,7 @@
 -opaque node_registry() :: ets:table().
 
 -spec new() -> node_registry().
-new() -> ets:new(node_registry, [public, set, {keypos, #node_registry_item.id}]).
+new() -> ets:new(node_registry, [public, ordered_set, {keypos, #node_registry_item.id}]).
 
 -spec get_by(node_registry(), binary() | id:id()) -> option:option(branch:branch()).
 get_by(NodeRegistry, Name) ->

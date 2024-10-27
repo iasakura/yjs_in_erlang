@@ -4,6 +4,7 @@
 
 -export_type([id_set/0]).
 
+-include_lib("kernel/include/logger.hrl").
 -include("../include/id.hrl").
 -include("../include/range.hrl").
 
@@ -99,6 +100,7 @@ decode_id_range(Bin) ->
 
 -spec encode_id_set(id_set()) -> binary().
 encode_id_set(IdSet) ->
+    ?LOG_DEBUG("encode_id_set: ~p", [IdSet]),
     LenBin = var_int:encode_uint(maps:size(IdSet)),
     Bin = maps:fold(
         fun(ClientId, Ranges, Acc) ->

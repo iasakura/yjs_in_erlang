@@ -3,8 +3,12 @@
  {<<"cowlib">>,{pkg,<<"cowlib">>,<<"2.13.0">>},1},
  {<<"eqwalizer_support">>,
   {git_subdir,"https://github.com/whatsapp/eqwalizer.git",
-              {ref,"0c099bbfa2fba1869d60e239c9b2cf2b6fb31ea9"},
+              {ref,"c628a9307774f8f18255af926c9b88febb231ee1"},
               "eqwalizer_support"},
+  0},
+ {<<"logger_color_formatter">>,
+  {git,"https://github.com/rlipscombe/logger_color_formatter.git",
+       {ref,"f1c96f979e6350f8cd787d27fe9ff003cbf3416b"}},
   0},
  {<<"ranch">>,{pkg,<<"ranch">>,<<"1.8.0">>},1}]}.
 [
