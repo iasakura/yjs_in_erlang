@@ -6,3 +6,9 @@
     doc :: doc:doc(),
     clients :: [pid()]
 }).
+
+-record(ws_local_state, {
+    manager :: websocket_connection_manager:ws_connection_manager(),
+    doc :: doc:doc(),
+    doc_id :: binary()
+}).

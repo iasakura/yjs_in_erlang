@@ -22,15 +22,17 @@
 
 -spec new() -> store().
 new() ->
+    EtsManager = ets_manager:new(),
     #store{
-        types = types:new(),
-        node_registry = node_registry:new(),
-        blocks = block_store:new(),
+        types = types:new(EtsManager),
+        node_registry = node_registry:new(EtsManager),
+        blocks = block_store:new(EtsManager),
         pending = undefined,
         pending_ds = undefined,
         subdocs = #{},
         parent = undefined,
-        linked_by = #{}
+        linked_by = #{},
+        ets_manager = ets_manager:new()
     }.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).
