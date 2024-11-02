@@ -51,29 +51,27 @@ get_update(Doc, _StateVector) ->
         AllBlocksMap
     ),
     DeleteSet = maps:map(
-        fun(ClientId, BS) ->
+        fun(_ClientId, BS) ->
             lists:foldl(
                 fun({_K, V}, Acc) ->
                     case V of
                         {block, Item} ->
                             case item:is_deleted(Item) of
                                 true ->
-                                    id_set:insert(Acc, Item#item.id, Item#item.len);
+                                    Start = Item#item.id#id.clock,
+                                    id_set:id_range_push(Acc, Start, Start + Item#item.len);
                                 false ->
                                     Acc
                             end;
                         {gc, G} ->
-                            id_set:insert(
+                            id_set:id_range_push(
                                 Acc,
-                                #id{
-                                    client = ClientId,
-                                    clock = G#gc.start
-                                },
-                                G#gc.end_ - G#gc.start
+                                G#gc.start,
+                                G#gc.end_
                             )
                     end
                 end,
-                id_set:new(),
+                {fragmented, []},
                 maps:to_list(BS)
             )
         end,

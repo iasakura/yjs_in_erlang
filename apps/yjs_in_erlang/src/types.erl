@@ -1,7 +1,7 @@
 -module(types).
 
 -export([
-    new/0,
+    new/1,
     put/2,
     get/2
 ]).
@@ -15,8 +15,9 @@
 
 -record(types_entry, {name :: binary()}).
 
--spec new() -> types().
-new() -> ets:new(types, [public, ordered_set, {keypos, #types_entry.name}]).
+-spec new(ets_manager:ets_manager()) -> types().
+new(EtsManager) ->
+    ets_manager:new_ets(EtsManager, types, [public, ordered_set, {keypos, #types_entry.name}]).
 
 -spec put(types(), binary()) -> true.
 put(Types, Name) -> ets:insert(Types, #types_entry{name = Name}).

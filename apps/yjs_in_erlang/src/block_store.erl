@@ -1,7 +1,7 @@
 -module(block_store).
 
 -export([
-    new/0,
+    new/1,
     put_item/2,
     get/2,
     get_item_clean_start/2,
@@ -17,30 +17,41 @@
 
 -include("../include/records.hrl").
 
--opaque block_store() :: ets:table().
+-record(block_store, {ets_manager :: ets_manager:ets_manager(), table :: ets:table()}).
+
+-opaque block_store() :: #block_store{}.
 -opaque client_block_list() :: ets:table().
 
--spec new() -> block_store().
-new() -> ets:new(block_store, [public, ordered_set, {keypos, #block_store_item.client}]).
+-spec new(ets_manager:ets_manager()) -> block_store().
+new(EtsManager) ->
+    #block_store{
+        ets_manager = EtsManager,
+        table = ets_manager:new_ets(EtsManager, block_store, [
+            public, ordered_set, {keypos, #block_store_item.client}
+        ])
+    }.
 
--spec add_client(block_store(), state_vector:client_id()) -> client_block_list().
+-spec add_client(block_store(), state_vector:client_id()) ->
+    client_block_list().
 add_client(BlockStore, Client) ->
-    Table = ets:new(client_block_list, [public, ordered_set, {keypos, #client_block.start}]),
-    ets:insert(BlockStore, #block_store_item{
+    Table = ets_manager:new_ets(BlockStore#block_store.ets_manager, client_block_list, [
+        public, ordered_set, {keypos, #client_block.start}
+    ]),
+    ets:insert(BlockStore#block_store.table, #block_store_item{
         client = Client, table = Table
     }),
     Table.
 
 -spec get_client(block_store(), state_vector:client_id()) -> option:option(client_block_list()).
-get_client(BlockStore, Client) ->
-    case ets:lookup(BlockStore, Client) of
+get_client(#block_store{table = BlockTable}, Client) ->
+    case ets:lookup(BlockTable, Client) of
         [] -> undefined;
         [#block_store_item{table = Table}] -> {ok, Table}
     end.
 
 -spec get(block_store(), id:id()) -> option:option(block:block_cell()).
 get(BlockStore, #id{client = Client, clock = Clock}) ->
-    case ets:lookup(BlockStore, Client) of
+    case ets:lookup(BlockStore#block_store.table, Client) of
         [] ->
             undefined;
         [#block_store_item{table = ClientBlockList}] ->
@@ -61,7 +72,7 @@ get_item(Store, Id) ->
 put_item(BlockStore, Item) ->
     #id{client = ClientId} = Item#item.id,
     Table =
-        case ets:lookup(BlockStore, ClientId) of
+        case ets:lookup(BlockStore#block_store.table, ClientId) of
             [#block_store_item{table = T}] ->
                 T;
             [] ->
@@ -93,7 +104,7 @@ get_item_clean_start(Store, Id) ->
 
 -spec get_clock(block_store(), state_vector:client_id()) -> integer().
 get_clock(BlockStore, Client) ->
-    case ets:lookup(BlockStore, Client) of
+    case ets:lookup(BlockStore#block_store.table, Client) of
         [#block_store_item{table = Table}] ->
             case ets:last(Table) of
                 '$end_of_table' -> 0;
@@ -132,7 +143,7 @@ get_state_vector(BlockStore) ->
             maps:put(ClientId, Clock, Acc)
         end,
         state_vector:new(),
-        BlockStore
+        BlockStore#block_store.table
     ).
 
 -spec push_gc(block_store(), update:block_range()) -> true.
@@ -143,7 +154,7 @@ push_gc(Store, Range) ->
         end_ = Id#id.clock + Range#block_range.len - 1
     },
     Table =
-        case ets:lookup(Store, Id#id.client) of
+        case ets:lookup(Store#block_store.table, Id#id.client) of
             [#block_store_item{table = T}] ->
                 T;
             [] ->
@@ -170,5 +181,5 @@ get_all(BlockStore) ->
             )
         end,
         #{},
-        BlockStore
+        BlockStore#block_store.table
     ).

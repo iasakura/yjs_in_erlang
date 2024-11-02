@@ -1,14 +1,17 @@
 -module(node_registry).
 
 -export_type([node_registry/0]).
--export([new/0, get_by/2, put/2, delete/2, delete_by_id/2]).
+-export([new/1, get_by/2, put/2, delete/2, delete_by_id/2]).
 
 -include("../include/node_registry.hrl").
 -include("../include/branch.hrl").
 -opaque node_registry() :: ets:table().
 
--spec new() -> node_registry().
-new() -> ets:new(node_registry, [public, ordered_set, {keypos, #node_registry_item.id}]).
+-spec new(ets_manager:ets_manager()) -> node_registry().
+new(EtsManager) ->
+    ets_manager:new_ets(EtsManager, node_registry, [
+        public, ordered_set, {keypos, #node_registry_item.id}
+    ]).
 
 -spec get_by(node_registry(), binary() | id:id()) -> option:option(branch:branch()).
 get_by(NodeRegistry, Name) ->
