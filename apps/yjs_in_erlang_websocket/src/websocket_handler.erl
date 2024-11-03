@@ -64,4 +64,6 @@ websocket_info(_, State) ->
     {[], State}.
 
 terminate(_, _, State) ->
-    websocket_connection_manager:disconnect(State#ws_local_state.manager, State#ws_local_state.doc_id).
+    websocket_connection_manager:disconnect(
+        State#ws_local_state.manager, State#ws_local_state.doc_id
+    ).
