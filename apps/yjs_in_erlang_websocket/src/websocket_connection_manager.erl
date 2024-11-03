@@ -25,7 +25,7 @@ new() ->
 loop(State) ->
     receive
         {From, {get_or_create_doc, DocId}} ->
-            {Doc, NewState} = get_or_create_doc_impl(State, DocId),
+            {Doc, NewState} = get_or_create_doc_impl(State, DocId, From),
             From ! {self(), Doc},
             loop(NewState);
         {From, {get_clients, DocId}} ->
@@ -41,18 +41,18 @@ get_or_create_doc(Manager, DocId) ->
         {_, Doc} -> Doc
     end.
 
--spec get_clients(ws_connection_manager(), binary()) -> option:option([pid()]).
+-spec get_clients(ws_connection_manager(), binary()) -> [pid()].
 get_clients(Manager, DocId) ->
     Manager ! {self(), {get_clients, DocId}},
     receive
-        {_, Clients} -> Clients
+        {Manager, Clients} -> Clients
     end.
 
--spec get_or_create_doc_impl(ws_global_state(), binary()) -> {doc:doc(), ws_global_state()}.
-get_or_create_doc_impl(State, DocId) ->
+-spec get_or_create_doc_impl(ws_global_state(), binary(), pid()) -> {doc:doc(), ws_global_state()}.
+get_or_create_doc_impl(State, DocId, From) ->
     case maps:find(DocId, State#ws_global_state.docs) of
         {ok, Doc} ->
-            NewDoc = Doc#ws_shared_doc{clients = [self() | Doc#ws_shared_doc.clients]},
+            NewDoc = Doc#ws_shared_doc{clients = [From | Doc#ws_shared_doc.clients]},
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
             },
@@ -60,7 +60,7 @@ get_or_create_doc_impl(State, DocId) ->
         error ->
             Doc = #ws_shared_doc{
                 doc = doc:new(),
-                clients = [self()]
+                clients = [From]
             },
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, Doc, State#ws_global_state.docs)
@@ -68,9 +68,9 @@ get_or_create_doc_impl(State, DocId) ->
             {Doc#ws_shared_doc.doc, NewState}
     end.
 
--spec get_clients_impl(ws_global_state(), binary()) -> option:option([pid()]).
+-spec get_clients_impl(ws_global_state(), binary()) -> [pid()].
 get_clients_impl(State, DocId) ->
     case maps:find(DocId, State#ws_global_state.docs) of
-        {ok, Doc} -> {ok, Doc#ws_shared_doc.clients};
-        error -> undefined
+        {ok, Doc} -> Doc#ws_shared_doc.clients;
+        error -> []
     end.
