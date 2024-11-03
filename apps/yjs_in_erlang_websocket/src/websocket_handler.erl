@@ -6,6 +6,7 @@
 -export([websocket_init/1]).
 -export([websocket_handle/2]).
 -export([websocket_info/2]).
+-export([terminate/3]).
 
 -include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
@@ -58,6 +59,9 @@ websocket_handle(_, Doc) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
 websocket_info({send, Update}, State) ->
     % eqwalizer:ignore
-    {[{binary, <<0:8, (protocol:encode_sync_message(Update))/binary>>}], State};
+    {[{binary, <<(protocol:encode_sync_message(Update))/binary>>}], State};
 websocket_info(_, State) ->
     {[], State}.
+
+terminate(_, _, State) ->
+    websocket_connection_manager:disconnect(State#ws_local_state.manager, State#ws_local_state.doc_id).
