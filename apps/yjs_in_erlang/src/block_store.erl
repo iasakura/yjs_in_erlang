@@ -137,8 +137,14 @@ get_state_vector(BlockStore) ->
         fun(#block_store_item{client = ClientId, table = Table}, Acc) ->
             Clock =
                 case ets:last(Table) of
-                    '$end_of_table' -> 0;
-                    Key -> Key
+                    '$end_of_table' ->
+                        0;
+                    Key ->
+                        case ets:lookup(Table, Key) of
+                            [#client_block{cell = Block}] ->
+                                {Start, Len} = block:id_range(Block),
+                                Start + Len
+                        end
                 end,
             maps:put(ClientId, Clock, Acc)
         end,
