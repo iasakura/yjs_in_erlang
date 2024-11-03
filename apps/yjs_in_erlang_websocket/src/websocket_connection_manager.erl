@@ -1,7 +1,7 @@
 -module(websocket_connection_manager).
 
 -export([
-    new/0, get_or_create_doc/2, get_clients/2
+    new/0, get_or_create_doc/2, get_clients/2, disconnect/2
 ]).
 -export_type([ws_connection_manager/0, ws_global_state/0, ws_shared_doc/0, ws_local_state/0]).
 
@@ -31,7 +31,20 @@ loop(State) ->
         {From, {get_clients, DocId}} ->
             Clients = get_clients_impl(State, DocId),
             From ! {self(), Clients},
-            loop(State)
+            loop(State);
+        {From, {disconnect, DocId}} ->
+            case maps:find(DocId, State#ws_global_state.docs) of
+                error ->
+                    loop(State);
+                {ok, Doc} ->
+                    NewDoc = Doc#ws_shared_doc{
+                        clients = lists:delete(From, Doc#ws_shared_doc.clients)
+                    },
+                    NewState = State#ws_global_state{
+                        docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
+                    },
+                    loop(NewState)
+            end
     end.
 
 -spec get_or_create_doc(ws_connection_manager(), binary()) -> doc:doc().
@@ -73,4 +86,11 @@ get_clients_impl(State, DocId) ->
     case maps:find(DocId, State#ws_global_state.docs) of
         {ok, Doc} -> Doc#ws_shared_doc.clients;
         error -> []
+    end.
+
+-spec disconnect(ws_connection_manager(), binary()) -> [pid()].
+disconnect(Manager, DocId) ->
+    Manager ! {self(), {disconnect, DocId}},
+    receive
+        {Manager, Clients} -> Clients
     end.
