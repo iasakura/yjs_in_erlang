@@ -54,14 +54,19 @@ bc_integrate({skip, _Range}, _Txn, _Offset) -> throw("wip: range.integrate").
 encode_update(Update) ->
     LenBin = maps:size(Update#update.update_blocks),
     UpdateBins = [
-        <<
-            (var_int:encode_uint(length(UpdateBlocks)))/binary,
-            (state_vector:encode_client_id(ClientId))/binary,
-            % TODO: offsetはstate vectorを指定したときに使うと全部のIDに加算されるのでクロックを小さくすることができてサイズが小さくなる
-            % 今回は0でいいんじゃないかな。
-            (var_int:encode_uint(0))/binary,
-            (encode_update_blocks(UpdateBlocks))/binary
-        >>
+        begin
+            Offset =
+                case UpdateBlocks of
+                    [] -> 0;
+                    [First | _] -> (bc_id(First))#id.clock
+                end,
+            <<
+                (var_int:encode_uint(length(UpdateBlocks)))/binary,
+                (state_vector:encode_client_id(ClientId))/binary,
+                (var_int:encode_uint(Offset))/binary,
+                (encode_update_blocks(UpdateBlocks))/binary
+            >>
+        end
      || {ClientId, UpdateBlocks} <- maps:to_list(Update#update.update_blocks)
     ],
     UpdateBin = list_to_binary(UpdateBins),
