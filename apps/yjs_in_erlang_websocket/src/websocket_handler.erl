@@ -13,7 +13,9 @@
 -type ws_local_state() :: websocket_connection_manager:ws_local_state().
 
 -spec init(cowboy_req:req(), websocket_connection_manager:ws_connection_manager()) ->
-    {cowboy_websocket, cowboy_req:req(), ws_local_state()}
+    {cowboy_websocket, cowboy_req:req(), {
+        websocket_connection_manager:ws_connection_manager(), binary()
+    }}
     | {ok, cowboy_req:req(), binary()}.
 init(Req, Manager) ->
     {PeerAddress, PeerPort} = cowboy_req:peer(Req),
@@ -26,12 +28,14 @@ init(Req, Manager) ->
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
             ?LOG_DEBUG("Create or get the room room: ~p from ~p~n", [Room, PeerAddress]),
-            Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
-            {cowboy_websocket, Req, #ws_local_state{manager = Manager, doc = Doc, doc_id = Room}}
+            {cowboy_websocket, Req, {Manager, Room}}
     end.
 
--spec websocket_init(ws_local_state()) -> {ok, ws_local_state()}.
-websocket_init(Doc) -> {ok, Doc}.
+-spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary()}) ->
+    {ok, ws_local_state()}.
+websocket_init({Manager, Room}) ->
+    Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+    {ok, #ws_local_state{manager = Manager, doc = Doc, doc_id = Room}}.
 
 -spec websocket_handle(
     ping | pong | {text | binary | ping | pong, binary()}, ws_local_state()
@@ -52,7 +56,8 @@ websocket_handle(_, Doc) ->
 
 -spec websocket_info(any(), websocket_connection_manager:ws_shared_doc()) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
-websocket_info({send, Update}, State) when is_binary(Update) ->
-    {[{binary, Update}], State};
+websocket_info({send, Update}, State) ->
+    % eqwalizer:ignore
+    {[{binary, <<0:8, (protocol:encode_sync_message(Update))/binary>>}], State};
 websocket_info(_, State) ->
     {[], State}.
