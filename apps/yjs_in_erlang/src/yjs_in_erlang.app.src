@@ -1,13 +1,12 @@
-{application, y_erl, [
-    {description, "An OTP application"},
+{application, yjs_in_erlang, [
+    {description, "An Yjs implementation in Erlang"},
     {vsn, "0.1.0"},
     {registered, []},
-    {mod, {y_erl_app, []}},
     {applications, [
         kernel,
         stdlib
     ]},
-    {env, []},
+    % {env, []},
     {modules, []},
 
     {licenses, ["Apache-2.0"]},
