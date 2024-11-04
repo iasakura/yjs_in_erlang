@@ -88,10 +88,11 @@ encode_id_range({fragmented, Ranges}) ->
 
 -spec decode_id_range(binary()) -> {id_range(), binary()}.
 decode_id_range(Bin) ->
+    ?LOG_DEBUG("decode_id_range: ~p", [Bin]),
     {Len, Bin0} = var_int:decode_uint(Bin),
     case Len of
         1 ->
-            {R, Rest} = range:decode_range(Bin),
+            {R, Rest} = range:decode_range(Bin0),
             {{continuous, R}, Rest};
         _ ->
             Rec = fun Rec(N, Bin1, Acc) ->
