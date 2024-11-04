@@ -47,7 +47,7 @@ utf8_codepoint_length(Binary) ->
 % codepoint数を先頭に置く
 -spec encode_string(binary()) -> binary().
 encode_string(Str) ->
-    <<(var_int:encode_uint(utf8_codepoint_length(Str)))/binary, Str/binary>>.
+    <<(var_int:encode_uint(byte_size(Str)))/binary, Str/binary>>.
 
 -spec decode_buf(binary()) -> {binary(), binary()}.
 decode_buf(Bin) ->
