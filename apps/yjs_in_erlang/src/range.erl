@@ -25,10 +25,10 @@ try_join(R1, R2) ->
 
 -spec encode_range(range()) -> binary().
 encode_range(#range{start = Start, end_ = End}) ->
-    <<(var_int:encode_uint(Start))/binary, (var_int:encode_uint(End))/binary>>.
+    <<(var_int:encode_uint(Start))/binary, (var_int:encode_uint(End - Start))/binary>>.
 
 -spec decode_range(binary()) -> {range(), binary()}.
 decode_range(Bin) ->
     {Start, Bin1} = var_int:decode_uint(Bin),
-    {End, Bin2} = var_int:decode_uint(Bin1),
-    {{range, Start, End}, Bin2}.
+    {Len, Bin2} = var_int:decode_uint(Bin1),
+    {{range, Start, Start + Len}, Bin2}.

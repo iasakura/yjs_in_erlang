@@ -281,38 +281,58 @@ internal_delete_item(Txn, Item) ->
 delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
     Store = Txn#transaction_mut.store,
     %  TODO: use lookup
-    case block_store:find_pivot(Blocks, Clock) of
-        undefined ->
-            [#range{start = Clock, end_ = ClockEnd}];
-        {ok, {_, {block, Item}}} ->
-            case item:is_deleted(Item) of
-                true ->
-                    delete_by_range(Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd);
-                false ->
-                    case Item#item.id#id.clock + item:len(Item) > ClockEnd of
-                        false ->
-                            {_, NewTxn} = internal_delete_item(Txn, Item),
-                            delete_by_range(
-                                NewTxn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
-                            );
+    case Clock >= ClockEnd of
+        true ->
+            [];
+        false ->
+            case block_store:find_pivot(Blocks, Clock) of
+                undefined ->
+                    [#range{start = Clock, end_ = ClockEnd}];
+                {ok, {_, {block, Item}}} ->
+                    case item:is_deleted(Item) of
                         true ->
-                            {ok, {NewItem1, NewItem2}} = item:splice(
-                                Store, Item, Clock - Item#item.id#id.clock
-                            ),
-                            NewTxn0 = Txn#transaction_mut{
-                                merge_blocks = [NewItem1#item.id | Txn#transaction_mut.merge_blocks]
-                            },
-                            {_, NewTxn1} = internal_delete_item(NewTxn0, NewItem1),
                             delete_by_range(
-                                NewTxn1,
-                                Blocks,
-                                NewItem2#item.id#id.clock,
-                                ClockEnd
-                            )
+                                Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
+                            );
+                        false ->
+                            case Item#item.id#id.clock + item:len(Item) > ClockEnd of
+                                false ->
+                                    {_, NewTxn} = internal_delete_item(Txn, Item),
+                                    delete_by_range(
+                                        NewTxn,
+                                        Blocks,
+                                        Item#item.id#id.clock + Item#item.len,
+                                        ClockEnd
+                                    );
+                                true ->
+                                    case
+                                        item:splice(
+                                            Store, Item, Clock - Item#item.id#id.clock
+                                        )
+                                    of
+                                        undefined ->
+                                            internal_delete_item(Txn, Item),
+                                            delete_by_range(
+                                                Txn, Blocks, Clock + Item#item.len, ClockEnd
+                                            );
+                                        {ok, {NewItem1, NewItem2}} ->
+                                            NewTxn0 = Txn#transaction_mut{
+                                                merge_blocks = [
+                                                    NewItem1#item.id
+                                                    | Txn#transaction_mut.merge_blocks
+                                                ]
+                                            },
+                                            {_, NewTxn1} = internal_delete_item(NewTxn0, NewItem1),
+                                            delete_by_range(
+                                                NewTxn1,
+                                                Blocks,
+                                                NewItem2#item.id#id.clock,
+                                                ClockEnd
+                                            )
+                                    end
+                            end
                     end
-            end;
-        _ ->
-            []
+            end
     end.
 
 -spec internal_apply_delete(transaction_mut_state(), update:delete_set()) -> update:delete_set().
