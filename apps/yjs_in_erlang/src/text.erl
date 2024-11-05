@@ -50,7 +50,12 @@ get_text(Start, Store, Acc) ->
     ok | error.
 insert(Txn, #id{client = Id, clock = Clock}, #y_text{branch = Branch}, Pos, Str) ->
     Start = Branch#branch.start,
-    {ok, {Origin, RightOrigin}} = get_id_from_pos(undefined, Start, Pos),
+    {ok, Origin} = get_id_from_pos(undefined, Start, Pos),
+    RightOrigin =
+        case util:get_item_from_link(transaction:get_store(Txn), Origin) of
+            undefined -> undefined;
+            {ok, Item} -> option:map(fun(Ptr) -> item_ptr:get_id(Ptr) end, Item#item.right)
+        end,
     % eqwalizer:ignore update...
     Update = #update{
         update_blocks = #{
