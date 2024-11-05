@@ -1,12 +1,16 @@
 -module(id).
 
--export([decode_id/1, encode_id/1]).
+-export([new/2, decode_id/1, encode_id/1]).
 
 -export_type([id/0]).
 
 -include("../include/id.hrl").
 
 -type id() :: #id{}.
+
+-spec new(state_vector:client_id(), integer()) -> id().
+new(Client, Clock) ->
+    #id{client = Client, clock = Clock}.
 
 -spec decode_id(binary()) -> {id(), binary()}.
 decode_id(Bin) ->
