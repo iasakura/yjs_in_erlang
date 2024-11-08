@@ -1,1 +1,1 @@
--record(y_text, {branch :: branch:branch(), store :: store:store()}).
+-record(y_text, {key :: binary() | id:id(), store :: store:store()}).

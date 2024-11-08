@@ -1,5 +1,7 @@
 -module(yjs_in_erlang_crdt_benchmark).
 
+-include_lib("kernel/include/logger.hrl").
+
 -export([bench/1]).
 
 -spec decompress_gzip_data(binary()) -> binary().
@@ -39,6 +41,9 @@ run(StartContent, EndContent, Txns) ->
             lists:foldl(
                 fun(Patch, InAcc) ->
                     [InsertPos, DeleteNum, InsertStr] = Patch,
+                    ?LOG_DEBUG("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
+                        InsertPos, DeleteNum, InsertStr
+                    ]),
                     text:delete(YTxn, Str, InsertPos, DeleteNum),
                     text:insert(YTxn, id:new(Id, InAcc), Str, InsertPos, InsertStr),
                     InAcc + util:compute_utf16_length(InsertStr)
