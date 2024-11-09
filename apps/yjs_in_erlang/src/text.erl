@@ -57,8 +57,13 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
     Start = Branch#branch.start,
     {ok, Origin} =
         case Pos of
-            0 -> {ok, undefined};
-            _ -> get_id_from_pos(undefined, Start, Pos - 1)
+            0 ->
+                {ok, undefined};
+            _ ->
+                case get_id_from_pos(undefined, Start, Pos - 1) of
+                    undefined -> undefined;
+                    {ok, Id2} -> {ok, {ok, Id2}}
+                end
         end,
     ?LOG_DEBUG("Origin: ~p", [Origin]),
     RightOrigin =
