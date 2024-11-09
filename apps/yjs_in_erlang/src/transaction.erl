@@ -72,7 +72,7 @@ transaction_loop(State) ->
 apply_delete(Txn, DeleteSet) ->
     Txn ! {self(), apply_delete, Txn, DeleteSet},
     receive
-        {Txn, DeleteSet} -> DeleteSet
+        {Txn, DeleteSet0} -> DeleteSet0
     end.
 
 -spec add_changed_type(transaction_mut(), branch:branch(), option:option(binary())) -> ok.
