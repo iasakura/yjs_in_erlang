@@ -15,8 +15,8 @@ new() ->
 
 -spec get_or_create_text(doc(), binary()) -> text:y_text().
 get_or_create_text(Doc, Str) ->
-    Branch = store:get_or_create_type(Doc#doc.store, Str, {text}),
-    #y_text{store = Doc#doc.store, branch = Branch}.
+    store:get_or_create_type(Doc#doc.store, Str, {text}),
+    #y_text{store = Doc#doc.store, key = Str}.
 
 -spec transact_mut(doc()) -> transaction:transaction_mut().
 transact_mut(Doc) ->

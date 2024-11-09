@@ -1,5 +1,6 @@
 -module(text).
 
+-include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
 
@@ -9,7 +10,8 @@
 -type y_text() :: #y_text{}.
 
 -spec get_string(y_text()) -> binary().
-get_string(#y_text{store = Store, branch = Branch}) ->
+get_string(#y_text{store = Store, key = Key}) ->
+    {ok, Branch} = store:get_branch(Store, Key),
     get_text(Branch#branch.start, Store, <<"">>).
 
 -spec get_text(option:option(item_ptr:item_ptr()), store:store(), binary()) -> binary().
@@ -48,40 +50,45 @@ get_text(Start, Store, Acc) ->
     binary()
 ) ->
     ok | error.
-insert(Txn, #id{client = Id, clock = Clock}, #y_text{branch = Branch}, Pos, Str) ->
+insert(_, _, _, _, <<>>) ->
+    ok;
+insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
+    {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
     Start = Branch#branch.start,
-    {ok, Origin} = get_id_from_pos(undefined, Start, Pos),
+    {ok, Origin} =
+        case Pos of
+            0 -> {ok, undefined};
+            _ -> get_id_from_pos(undefined, Start, Pos)
+        end,
+    ?LOG_DEBUG("Origin: ~p", [Origin]),
     RightOrigin =
         case util:get_item_from_link(transaction:get_store(Txn), Origin) of
-            undefined -> undefined;
+            undefined -> option:map(fun(Ptr) -> item_ptr:get_id(Ptr) end, Start);
             {ok, Item} -> option:map(fun(Ptr) -> item_ptr:get_id(Ptr) end, Item#item.right)
         end,
-    % eqwalizer:ignore update...
+    Item2 = #item{
+        id = #id{client = Id, clock = Clock},
+        len = byte_size(Str),
+        left = undefined,
+        right = undefined,
+        origin = Origin,
+        right_origin = RightOrigin,
+        content = {string, Str},
+        parent =
+            case is_binary(Key) of
+                true -> {named, Key};
+                false -> {id, Key}
+            end,
+        redone = undefined,
+        parent_sub = undefined,
+        moved = undefined,
+        info = ?ITEM_FLAG_COUNTABLE
+    },
+    % eqwalizer:ignore unbound rec update
     Update = #update{
         update_blocks = #{
             Id => [
-                {item, #item{
-                    id = #id{client = Id, clock = Clock},
-                    len = byte_size(Str),
-                    left = undefined,
-                    right = undefined,
-                    origin = Origin,
-                    right_origin = RightOrigin,
-                    content = {string, Str},
-                    parent = Branch#branch.item,
-                    redone = undefined,
-                    parent_sub = undefined,
-                    moved = undefined,
-                    info =
-                        (case option:is_some(Origin) of
-                            true -> ?HAS_ORIGIN;
-                            false -> 0
-                        end) bor
-                            case option:is_none(RightOrigin) of
-                                true -> ?HAS_RIGHT_ORIGIN;
-                                false -> 0
-                            end bor 0 bor item_content:get_ref_number({string, Str})
-                }}
+                {item, Item2}
             ]
         },
         delete_set = #{}
@@ -96,9 +103,15 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{branch = Branch}, Pos, Str)
     integer()
 ) ->
     ok | error.
-delete(Txn, #y_text{branch = Branch}, Pos, Len) ->
-    {ok, #id{client = Id, clock = Clock}} = get_id_from_pos(undefined, Branch#branch.start, Pos),
-    % eqwalizer:ignore update...
+delete(_, _, _, 0) ->
+    ok;
+delete(Txn, #y_text{key = Key}, Pos, Len) ->
+    {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
+    ?LOG_DEBUG("Branch: ~p", [Branch]),
+    {ok, {ok, #id{client = Id, clock = Clock}}} = get_id_from_pos(
+        undefined, Branch#branch.start, Pos
+    ),
+    % eqwalizer:ignore unbound rec update
     Update = #update{
         update_blocks = #{},
         delete_set = #{Id => {continuous, #range{start = Clock, end_ = Clock + Len - 1}}}
@@ -108,6 +121,7 @@ delete(Txn, #y_text{branch = Branch}, Pos, Len) ->
 -spec get_id_from_pos(option:option(id:id()), option:option(item_ptr:item_ptr()), integer()) ->
     option:option(option:option(id:id())).
 get_id_from_pos(Prev, Start, Pos) ->
+    ?LOG_DEBUG("get_id_from_pos: ~p, ~p, ~p", [Prev, Start, Pos]),
     case Start of
         undefined ->
             case Pos of
@@ -119,6 +133,7 @@ get_id_from_pos(Prev, Start, Pos) ->
                 undefined ->
                     throw("unreachable");
                 {ok, Item} ->
+                    ?LOG_DEBUG("Item: ~p", [Item]),
                     case item:is_deleted(Item) of
                         false ->
                             case item:len(Item) > Pos of

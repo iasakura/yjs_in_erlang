@@ -4,6 +4,7 @@
     new/0,
     get_item/2,
     put_item/2,
+    get_branch/2,
     put_branch/2,
     materialize/2,
     delete_branch/2,
@@ -47,6 +48,13 @@ get_item(Store, Id) ->
 put_item(Store, Item) ->
     block_store:put_item(Store#store.blocks, Item),
     Item.
+
+-spec get_branch(store(), id:id() | binary()) -> option:option(branch:branch()).
+get_branch(Store, Key) ->
+    case node_registry:get_by(Store#store.node_registry, Key) of
+        {ok, Branch} -> {ok, Branch};
+        undefined -> undefined
+    end.
 
 -spec put_branch(store(), branch:branch()) -> branch:branch().
 put_branch(Store, Branch) ->
