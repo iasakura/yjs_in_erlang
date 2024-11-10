@@ -57,8 +57,13 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
     Start = Branch#branch.start,
     {ok, Origin} =
         case Pos of
-            0 -> {ok, undefined};
-            _ -> get_id_from_pos(undefined, Start, Pos)
+            0 ->
+                {ok, undefined};
+            _ ->
+                case get_id_from_pos(undefined, Start, Pos - 1) of
+                    undefined -> undefined;
+                    {ok, Id2} -> {ok, {ok, Id2}}
+                end
         end,
     ?LOG_DEBUG("Origin: ~p", [Origin]),
     RightOrigin =
@@ -108,50 +113,106 @@ delete(_, _, _, 0) ->
 delete(Txn, #y_text{key = Key}, Pos, Len) ->
     {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
     ?LOG_DEBUG("Branch: ~p", [Branch]),
-    {ok, {ok, #id{client = Id, clock = Clock}}} = get_id_from_pos(
-        undefined, Branch#branch.start, Pos
+    {ok, IdRange} = get_id_set_from_range(
+        transaction:get_store(Txn),
+        undefined,
+        Branch#branch.start,
+        Pos,
+        Len
     ),
     % eqwalizer:ignore unbound rec update
     Update = #update{
         update_blocks = #{},
-        delete_set = #{Id => {continuous, #range{start = Clock, end_ = Clock + Len - 1}}}
+        delete_set = IdRange
     },
     transaction:apply_update(Txn, Update).
 
 -spec get_id_from_pos(option:option(id:id()), option:option(item_ptr:item_ptr()), integer()) ->
-    option:option(option:option(id:id())).
+    option:option(id:id()).
 get_id_from_pos(Prev, Start, Pos) ->
     ?LOG_DEBUG("get_id_from_pos: ~p, ~p, ~p", [Prev, Start, Pos]),
-    case Start of
+    case Pos of
+        0 ->
+            option:map(fun(S) -> item_ptr:get_id(S) end, Start);
+        _ ->
+            case Start of
+                undefined ->
+                    undefined;
+                {ok, S} ->
+                    case item_ptr:get_view(S) of
+                        undefined ->
+                            throw("unreachable");
+                        {ok, Item} ->
+                            ?LOG_DEBUG("Item: ~p", [Item]),
+                            case item:is_deleted(Item) of
+                                false ->
+                                    case item:len(Item) > Pos of
+                                        true ->
+                                            {ok, #id{
+                                                client = Item#item.id#id.client,
+                                                clock = Item#item.id#id.clock + Pos
+                                            }};
+                                        false ->
+                                            get_id_from_pos(
+                                                {ok, Item#item.id},
+                                                Item#item.right,
+                                                Pos - item:len(Item)
+                                            )
+                                    end;
+                                true ->
+                                    get_id_from_pos(Prev, Item#item.right, Pos)
+                            end
+                    end
+            end
+    end.
+
+-spec get_id_set_from_range(
+    store:store(),
+    option:option(id:id()),
+    option:option(item_ptr:item_ptr()),
+    integer(),
+    integer()
+) ->
+    option:option(id_set:id_set()).
+get_id_set_from_range(Store, Prev, Start, Pos, Len) ->
+    ?LOG_DEBUG("get_id_set_from_range: ~p, ~p, ~p", [Prev, Start, Pos, Len]),
+    case get_id_from_pos(Prev, Start, Pos) of
         undefined ->
-            case Pos of
-                0 -> {ok, Prev};
-                _ -> undefined
+            undefined;
+        {ok, Id} ->
+            get_id_set({ok, item_ptr:new(Store, Id)}, Len, id_set:new())
+    end.
+
+-spec get_id_set(option:option(item_ptr:item_ptr()), integer(), id_set:id_set()) ->
+    option:option(id_set:id_set()).
+get_id_set(ItemPtr, Len, IdSet) ->
+    case ItemPtr of
+        undefined ->
+            case Len of
+                0 ->
+                    {ok, IdSet};
+                _ ->
+                    undefined
             end;
-        {ok, S} ->
-            case item_ptr:get_view(S) of
+        {ok, ItemPtr2} ->
+            case item_ptr:get_view(ItemPtr2) of
                 undefined ->
                     throw("unreachable");
                 {ok, Item} ->
-                    ?LOG_DEBUG("Item: ~p", [Item]),
                     case item:is_deleted(Item) of
-                        false ->
-                            case item:len(Item) > Pos of
-                                true ->
-                                    {ok,
-                                        {ok, #id{
-                                            client = Item#item.id#id.client,
-                                            clock = Item#item.id#id.clock + Pos
-                                        }}};
-                                false ->
-                                    get_id_from_pos(
-                                        {ok, Item#item.id},
-                                        Item#item.right,
-                                        Pos - item:len(Item)
-                                    )
-                            end;
                         true ->
-                            get_id_from_pos(Prev, Item#item.right, Pos)
+                            get_id_set(Item#item.right, Len, IdSet);
+                        false ->
+                            case item:len(Item) > Len of
+                                true ->
+                                    {ok, id_set:insert(IdSet, Item#item.id, Len)};
+                                false ->
+                                    get_id_set(
+                                        Item#item.right,
+                                        Len - item:len(Item),
+                                        id_set:insert(IdSet, Item#item.id, Len)
+                                    )
+                            end
                     end
             end
     end.

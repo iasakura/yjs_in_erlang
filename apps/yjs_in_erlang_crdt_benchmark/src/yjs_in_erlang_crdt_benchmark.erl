@@ -2,7 +2,7 @@
 
 -include_lib("kernel/include/logger.hrl").
 
--export([bench/1]).
+-export([bench/0, bench/1]).
 
 -spec decompress_gzip_data(binary()) -> binary().
 decompress_gzip_data(BinaryData) ->
@@ -13,6 +13,13 @@ decompress_gzip_data(BinaryData) ->
     ok = zlib:inflateEnd(Zlib),
     zlib:close(Zlib),
     iolist_to_binary(DecompressedData).
+
+-spec bench() -> ok.
+bench() ->
+    logging:init(),
+    bench(
+        <<"apps/yjs_in_erlang_crdt_benchmark/editing-traces/sequential_traces/clownschool_flat.json.gz">>
+    ).
 
 -spec bench(binary()) -> ok.
 bench(FileName) ->
@@ -41,7 +48,7 @@ run(StartContent, EndContent, Txns) ->
             lists:foldl(
                 fun(Patch, InAcc) ->
                     [InsertPos, DeleteNum, InsertStr] = Patch,
-                    ?LOG_DEBUG("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
+                    ?LOG_INFO("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
                         InsertPos, DeleteNum, InsertStr
                     ]),
                     text:delete(YTxn, Str, InsertPos, DeleteNum),
@@ -55,7 +62,7 @@ run(StartContent, EndContent, Txns) ->
         Clock,
         Txns
     ),
-    case text:get_string(Str) == EndContent of
+    case text:get_string(Str) =:= EndContent of
         true -> io:format("OK~n");
         false -> io:format("NG~n")
     end,
