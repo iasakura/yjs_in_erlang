@@ -3,10 +3,10 @@
 
 init() ->
     logger:set_primary_config(#{
-        level => debug
+        level => info
     }),
     logger:add_handler(to_file_handler, logger_std_h, #{
-        config => #{file => "/tmp/debug.log"}, level => debug
+        config => #{file => "/tmp/debug.log"}, level => info
     }),
     logger:set_handler_config(
         default,
