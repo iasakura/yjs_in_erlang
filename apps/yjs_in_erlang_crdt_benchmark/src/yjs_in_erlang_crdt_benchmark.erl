@@ -42,24 +42,72 @@ run(StartContent, EndContent, Txns) ->
     Id = state_vector:integer_to_client_id(0),
     text:insert(YTxn, id:new(Id, 0), Str, 0, StartContent),
     Clock = util:compute_utf16_length(StartContent),
+    TxnLen = length(Txns),
     lists:foldl(
-        fun(Txn, Acc) ->
+        fun(Txn, {N, Acc}) ->
+            if
+                N rem 100 =:= 0 ->
+                    ?LOG_INFO("#~p / ~p", [
+                        N, TxnLen
+                    ]);
+                true ->
+                    ok
+            end,
             Patches = maps:get(<<"patches">>, Txn),
-            lists:foldl(
+            Next = lists:foldl(
                 fun(Patch, InAcc) ->
-                    [InsertPos, DeleteNum, InsertStr] = Patch,
+                    PrevText = text:get_string(Str),
+                    [Pos, DeleteNum, InsertStr] = Patch,
                     ?LOG_INFO("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
-                        InsertPos, DeleteNum, InsertStr
+                        Pos, DeleteNum, InsertStr
                     ]),
-                    text:delete(YTxn, Str, InsertPos, DeleteNum),
-                    text:insert(YTxn, id:new(Id, InAcc), Str, InsertPos, InsertStr),
+                    text:delete(YTxn, Str, Pos, DeleteNum),
+                    text:insert(YTxn, id:new(Id, InAcc), Str, Pos, InsertStr),
+                    % DEBUG
+                    case unicode:characters_to_list(PrevText, utf8) of
+                        S when is_list(S) -> CodePoints = S;
+                        _ ->
+                            throw("invalid text"),
+                            % unreachable
+                            CodePoints = []
+                    end,
+                    case unicode:characters_to_binary(lists:sublist(CodePoints, Pos)) of
+                        Bin when is_binary(Bin) ->
+                            BytePos = byte_size(Bin);
+                        _ ->
+                            throw("invalid text"),
+                            BytePos = 0
+                    end,
+                    case unicode:characters_to_binary(lists:sublist(CodePoints, Pos + DeleteNum)) of
+                        Bin0 when is_binary(Bin0) ->
+                            DeleteBytePos = byte_size(Bin0);
+                        _ ->
+                            throw("invalid text"),
+                            DeleteBytePos = 0
+                    end,
+                    Expected = <<
+                        (binary:part(PrevText, 0, BytePos))/binary,
+                        InsertStr/binary,
+                        (binary:part(PrevText, DeleteBytePos, byte_size(PrevText) - DeleteBytePos))/binary
+                    >>,
+                    NewText = text:get_string(Str),
+                    ?LOG_INFO("~p, ~p", [
+                        Expected, NewText
+                    ]),
+                    case Expected =/= NewText of
+                        true ->
+                            throw(io_lib:format("assert failure: ~p =/= ~p", [Expected, NewText]));
+                        false ->
+                            ok
+                    end,
                     InAcc + util:compute_utf16_length(InsertStr)
                 end,
                 Acc,
                 eqwalizer:dynamic_cast(Patches)
-            )
+            ),
+            {N + 1, Next}
         end,
-        Clock,
+        {0, Clock},
         Txns
     ),
     case text:get_string(Str) =:= EndContent of

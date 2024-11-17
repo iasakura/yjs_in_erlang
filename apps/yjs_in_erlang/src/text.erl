@@ -60,17 +60,36 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
             0 ->
                 {ok, undefined};
             _ ->
-                case get_id_from_pos(undefined, Start, Pos - 1) of
+                case get_id_from_pos(Start, Pos - 1) of
                     undefined -> undefined;
                     {ok, Id2} -> {ok, {ok, Id2}}
                 end
         end,
-    ?LOG_DEBUG("Origin: ~p", [Origin]),
-    RightOrigin =
-        case util:get_item_from_link(transaction:get_store(Txn), Origin) of
-            undefined -> option:map(fun(Ptr) -> item_ptr:get_id(Ptr) end, Start);
-            {ok, Item} -> option:map(fun(Ptr) -> item_ptr:get_id(Ptr) end, Item#item.right)
-        end,
+    ?LOG_INFO("Origin: ~p", [Origin]),
+    case Origin of
+        undefined ->
+            ok;
+        {ok, OriginId_} ->
+            ?LOG_INFO("Origin ~p, Origin item: ~p", [
+                OriginId_, store:get_item(transaction:get_store(Txn), OriginId_)
+            ])
+    end,
+    RightOrigin = get_id_from_pos(Start, Pos),
+    ?LOG_INFO("RightOrigin: ~p", [RightOrigin]),
+    case RightOrigin of
+        undefined ->
+            ok;
+        {ok, RightOriginId} ->
+            ?LOG_INFO("RightOrigin ~p, RightOrigin item: ~p", [
+                RightOriginId, store:get_item(transaction:get_store(Txn), RightOriginId)
+            ])
+    end,
+    case Origin of
+        undefined ->
+            ok;
+        {ok, OriginId} ->
+            ?LOG_INFO("Origin item: ~p", [store:get_item(transaction:get_store(Txn), OriginId)])
+    end,
     Item2 = #item{
         id = #id{client = Id, clock = Clock},
         len = byte_size(Str),
@@ -112,71 +131,73 @@ delete(_, _, _, 0) ->
     ok;
 delete(Txn, #y_text{key = Key}, Pos, Len) ->
     {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
-    ?LOG_DEBUG("Branch: ~p", [Branch]),
-    {ok, IdRange} = get_id_set_from_range(
+    ?LOG_INFO("Branch: ~p", [Branch]),
+    {ok, IdSet} = get_id_set_from_range(
         transaction:get_store(Txn),
-        undefined,
         Branch#branch.start,
         Pos,
         Len
     ),
+    ?LOG_INFO("IdSet: ~p", [IdSet]),
+    % case IdSet of
+    %     undefined ->
+    %         ok;
+    %     {ok, IdRange} ->
+    %         maps:foreach(fun (Client, Range) ->
+    %             ?LOG_INFO("Client: ~p, Range: ~p", [Client, Range]),
+
+    %         end, IdSet)
+    %     end,
     % eqwalizer:ignore unbound rec update
     Update = #update{
         update_blocks = #{},
-        delete_set = IdRange
+        delete_set = IdSet
     },
     transaction:apply_update(Txn, Update).
 
--spec get_id_from_pos(option:option(id:id()), option:option(item_ptr:item_ptr()), integer()) ->
+-spec get_id_from_pos(option:option(item_ptr:item_ptr()), integer()) ->
     option:option(id:id()).
-get_id_from_pos(Prev, Start, Pos) ->
-    ?LOG_DEBUG("get_id_from_pos: ~p, ~p, ~p", [Prev, Start, Pos]),
-    case Pos of
-        0 ->
-            option:map(fun(S) -> item_ptr:get_id(S) end, Start);
-        _ ->
-            case Start of
+get_id_from_pos(Start, Pos) ->
+    ?LOG_INFO("get_id_from_pos: ~p, ~p", [Start, Pos]),
+    case Start of
+        undefined ->
+            undefined;
+        {ok, S} ->
+            case item_ptr:get_view(S) of
                 undefined ->
-                    undefined;
-                {ok, S} ->
-                    case item_ptr:get_view(S) of
-                        undefined ->
-                            throw("unreachable");
-                        {ok, Item} ->
-                            ?LOG_DEBUG("Item: ~p", [Item]),
-                            case item:is_deleted(Item) of
-                                false ->
-                                    case item:len(Item) > Pos of
-                                        true ->
-                                            {ok, #id{
-                                                client = Item#item.id#id.client,
-                                                clock = Item#item.id#id.clock + Pos
-                                            }};
-                                        false ->
-                                            get_id_from_pos(
-                                                {ok, Item#item.id},
-                                                Item#item.right,
-                                                Pos - item:len(Item)
-                                            )
-                                    end;
+                    throw("unreachable");
+                {ok, Item} ->
+                    ?LOG_INFO("Item: ~p", [Item]),
+                    case item:is_deleted(Item) of
+                        false ->
+                            case item:len(Item) > Pos of
                                 true ->
-                                    get_id_from_pos(Prev, Item#item.right, Pos)
-                            end
+                                    {ok, #id{
+                                        client = Item#item.id#id.client,
+                                        clock = Item#item.id#id.clock + Pos
+                                    }};
+                                false ->
+                                    get_id_from_pos(
+                                        Item#item.right,
+                                        Pos - item:len(Item)
+                                    )
+                            end;
+                        true ->
+                            get_id_from_pos(Item#item.right, Pos)
                     end
             end
     end.
 
 -spec get_id_set_from_range(
     store:store(),
-    option:option(id:id()),
     option:option(item_ptr:item_ptr()),
     integer(),
     integer()
 ) ->
     option:option(id_set:id_set()).
-get_id_set_from_range(Store, Prev, Start, Pos, Len) ->
-    ?LOG_DEBUG("get_id_set_from_range: ~p, ~p, ~p", [Prev, Start, Pos, Len]),
-    case get_id_from_pos(Prev, Start, Pos) of
+get_id_set_from_range(Store, Start, Pos, Len) ->
+    ?LOG_INFO("get_id_set_from_range: ~p, ~p, ~p", [Start, Pos, Len]),
+    case get_id_from_pos(Start, Pos) of
         undefined ->
             undefined;
         {ok, Id} ->
@@ -203,14 +224,19 @@ get_id_set(ItemPtr, Len, IdSet) ->
                         true ->
                             get_id_set(Item#item.right, Len, IdSet);
                         false ->
-                            case item:len(Item) > Len of
+                            Offset = (item_ptr:get_id(ItemPtr2))#id.clock - Item#item.id#id.clock,
+                            case item:len(Item) > Len + Offset of
                                 true ->
-                                    {ok, id_set:insert(IdSet, Item#item.id, Len)};
+                                    {ok, id_set:insert(IdSet, item_ptr:get_id(ItemPtr2), Len)};
                                 false ->
                                     get_id_set(
                                         Item#item.right,
-                                        Len - item:len(Item),
-                                        id_set:insert(IdSet, Item#item.id, Len)
+                                        Len - item:len(Item) + Offset,
+                                        id_set:insert(
+                                            IdSet,
+                                            item_ptr:get_id(ItemPtr2),
+                                            item:len(Item) - Offset
+                                        )
                                     )
                             end
                     end

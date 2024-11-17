@@ -315,7 +315,9 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                                                 end;
                                             _ ->
                                                 CurLeft
-                                        end
+                                        end;
+                                    _ ->
+                                        CurLeft
                                 end
                         end
                 end
