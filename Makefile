@@ -1,4 +1,4 @@
-.PHONY: check
+.PHONY: check test
 check:
 	rebar3 fmt -w
 	rebar3 xref
