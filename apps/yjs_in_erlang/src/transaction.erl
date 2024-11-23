@@ -295,25 +295,30 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                                 Txn, Blocks, Item#item.id#id.clock + Item#item.len, ClockEnd
                             );
                         false ->
-                            case Item#item.id#id.clock + item:len(Item) > ClockEnd of
-                                false ->
-                                    {_, NewTxn} = internal_delete_item(Txn, Item),
+                            case Clock =:= Item#item.id#id.clock of
+                                true -> Deleted = Item;
+                                false -> {ok, {_, Deleted}} = item:splice(Store, Item, Clock)
+                            end,
+                            % 完全に含まれる場合
+                            case Deleted#item.id#id.clock + item:len(Deleted) =< ClockEnd of
+                                true ->
+                                    {_, NewTxn} = internal_delete_item(Txn, Deleted),
                                     delete_by_range(
                                         NewTxn,
                                         Blocks,
-                                        Item#item.id#id.clock + Item#item.len,
+                                        Deleted#item.id#id.clock + Deleted#item.len,
                                         ClockEnd
                                     );
-                                true ->
+                                false ->
                                     case
                                         item:splice(
-                                            Store, Item, Clock - Item#item.id#id.clock
+                                            Store, Deleted, Clock - Deleted#item.id#id.clock
                                         )
                                     of
                                         undefined ->
-                                            internal_delete_item(Txn, Item),
+                                            internal_delete_item(Txn, Deleted),
                                             delete_by_range(
-                                                Txn, Blocks, Clock + Item#item.len, ClockEnd
+                                                Txn, Blocks, Clock + Deleted#item.len, ClockEnd
                                             );
                                         {ok, {NewItem1, NewItem2}} ->
                                             NewTxn0 = Txn#transaction_mut{

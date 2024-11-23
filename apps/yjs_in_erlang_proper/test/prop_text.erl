@@ -7,7 +7,7 @@
 prop_test() ->
     ?FORALL(
         Type,
-        mytype(),
+        edits(),
         begin
             Doc = new(),
             Text = doc:get_or_create_text(Doc, <<"text">>),
@@ -51,7 +51,7 @@ new() -> doc:new().
 %%%%%%%%%%%%%%%%%%
 %%% Generators %%%
 %%%%%%%%%%%%%%%%%%
-mytype() ->
+edits() ->
     list(
         % 位置、削除数、文字列
         {non_neg_integer(), non_neg_integer(), ascii_string()}
