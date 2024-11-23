@@ -297,7 +297,7 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                         false ->
                             case Clock =:= Item#item.id#id.clock of
                                 true -> Deleted = Item;
-                                false -> {ok, {_, Deleted}} = item:splice(Store, Item, Clock)
+                                false -> {ok, {_, Deleted}} = item:splice(Store, Item, Clock - Item#item.id#id.clock)
                             end,
                             % 完全に含まれる場合
                             case Deleted#item.id#id.clock + item:len(Deleted) =< ClockEnd of

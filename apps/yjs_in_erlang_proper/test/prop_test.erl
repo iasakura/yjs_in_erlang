@@ -5,10 +5,13 @@
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
 prop_test() ->
-    ?FORALL(Type, mytype(),
+    ?FORALL(
+        Type,
+        mytype(),
         begin
             boolean(Type)
-        end).
+        end
+    ).
 
 %%%%%%%%%%%%%%%
 %%% Helpers %%%

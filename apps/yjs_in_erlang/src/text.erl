@@ -171,7 +171,7 @@ get_id_from_pos(Start, Pos) ->
                     ?LOG_INFO("Item: ~p", [Item]),
                     case item:is_deleted(Item) of
                         false ->
-                            case item:len(Item) > Pos of
+                            case item:len(Item) > Pos - Item#item.id#id.clock of
                                 true ->
                                     {ok, #id{
                                         client = Item#item.id#id.client,
@@ -179,12 +179,12 @@ get_id_from_pos(Start, Pos) ->
                                     }};
                                 false ->
                                     get_id_from_pos(
-                                        Item#item.right,
+                                        item_ptr:next(S),
                                         Pos - item:len(Item)
                                     )
                             end;
                         true ->
-                            get_id_from_pos(Item#item.right, Pos)
+                            get_id_from_pos(item_ptr:next(S), Pos)
                     end
             end
     end.
@@ -202,12 +202,14 @@ get_id_set_from_range(Store, Start, Pos, Len) ->
         undefined ->
             undefined;
         {ok, Id} ->
+            ?LOG_INFO("Id: ~p", [Id]),
             get_id_set({ok, item_ptr:new(Store, Id)}, Len, id_set:new())
     end.
 
 -spec get_id_set(option:option(item_ptr:item_ptr()), integer(), id_set:id_set()) ->
     option:option(id_set:id_set()).
 get_id_set(ItemPtr, Len, IdSet) ->
+    ?LOG_INFO("get_id_set: ~p, ~p, ~p", [ItemPtr, Len, IdSet]),
     case ItemPtr of
         undefined ->
             case Len of
@@ -223,7 +225,7 @@ get_id_set(ItemPtr, Len, IdSet) ->
                 {ok, Item} ->
                     case item:is_deleted(Item) of
                         true ->
-                            get_id_set(Item#item.right, Len, IdSet);
+                            get_id_set(item_ptr:next(ItemPtr2), Len, IdSet);
                         false ->
                             Offset = (item_ptr:get_id(ItemPtr2))#id.clock - Item#item.id#id.clock,
                             case item:len(Item) > Len + Offset of
@@ -231,7 +233,7 @@ get_id_set(ItemPtr, Len, IdSet) ->
                                     {ok, id_set:insert(IdSet, item_ptr:get_id(ItemPtr2), Len)};
                                 false ->
                                     get_id_set(
-                                        Item#item.right,
+                                        item_ptr:next(ItemPtr2),
                                         Len - item:len(Item) + Offset,
                                         id_set:insert(
                                             IdSet,
