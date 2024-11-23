@@ -515,7 +515,7 @@ check_deleted(_Store, Parent, Item) ->
 % TODO: OffsetKind
 -spec splice(store:store(), item(), integer()) -> option:option({item(), item()}).
 splice(Store, Item, Offset) ->
-    case Offset =:= 0 of
+    case Offset =:= 0 orelse Offset =:= Item#item.len of
         true ->
             undefined;
         false ->
