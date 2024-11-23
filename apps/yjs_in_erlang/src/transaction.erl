@@ -312,14 +312,10 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                                 false ->
                                     case
                                         item:splice(
-                                            Store, Deleted, Clock - Deleted#item.id#id.clock
+                                            Store, Deleted, ClockEnd - Deleted#item.id#id.clock
                                         )
                                     of
-                                        undefined ->
-                                            internal_delete_item(Txn, Deleted),
-                                            delete_by_range(
-                                                Txn, Blocks, Clock + Deleted#item.len, ClockEnd
-                                            );
+                                        undefined -> [];
                                         {ok, {NewItem1, NewItem2}} ->
                                             NewTxn0 = Txn#transaction_mut{
                                                 merge_blocks = [
