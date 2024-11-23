@@ -112,6 +112,7 @@ get_clock(BlockStore, Client) ->
             end
     end.
 
+%% Find the element which contains the given clock.
 -spec find_pivot(client_block_list(), integer()) -> option:option({integer(), block:block_cell()}).
 find_pivot(Table, Clock) ->
     case ets:prev(Table, Clock + 1) of

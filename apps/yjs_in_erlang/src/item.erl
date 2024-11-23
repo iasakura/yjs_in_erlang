@@ -531,6 +531,7 @@ splice(Store, Item, Offset) ->
             },
             New1 = Item#item{
                 content = Content1,
+                len = item_content:len(Content1),
                 right = {ok, item_ptr:new(Store, New2#item.id)}
             },
             store:put_item(Store, New1),

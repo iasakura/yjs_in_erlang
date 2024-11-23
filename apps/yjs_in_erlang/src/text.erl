@@ -55,6 +55,7 @@ insert(_, _, _, _, <<>>) ->
 insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
     {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
     Start = Branch#branch.start,
+    ?LOG_DEBUG("Start: ~p", [Start]),
     {ok, Origin} =
         case Pos of
             0 ->
