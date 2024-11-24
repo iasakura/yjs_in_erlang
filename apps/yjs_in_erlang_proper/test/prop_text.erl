@@ -4,7 +4,7 @@
 run_with_timeout(F, Timeout) ->
     Parent = self(),
     %% テストプロセスを生成
-    TestPid = spawn(fun() ->
+    _TestPid = spawn(fun() ->
         Result = proper:quickcheck(F(), []),
         Parent ! {done, Result}
     end),
