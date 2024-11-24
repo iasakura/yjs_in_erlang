@@ -202,12 +202,14 @@ get_id_set_from_range(Store, Start, Pos, Len) ->
         undefined ->
             undefined;
         {ok, Id} ->
+            ?LOG_INFO("Id: ~p", [Id]),
             get_id_set({ok, item_ptr:new(Store, Id)}, Len, id_set:new())
     end.
 
 -spec get_id_set(option:option(item_ptr:item_ptr()), integer(), id_set:id_set()) ->
     option:option(id_set:id_set()).
 get_id_set(ItemPtr, Len, IdSet) ->
+    ?LOG_INFO("get_id_set: ~p, ~p, ~p", [ItemPtr, Len, IdSet]),
     case ItemPtr of
         undefined ->
             case Len of
