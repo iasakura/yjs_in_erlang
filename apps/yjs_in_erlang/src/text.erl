@@ -179,12 +179,12 @@ get_id_from_pos(Start, Pos) ->
                                     }};
                                 false ->
                                     get_id_from_pos(
-                                        item_ptr:next(S),
+                                        Item#item.right,
                                         Pos - item:len(Item)
                                     )
                             end;
                         true ->
-                            get_id_from_pos(item_ptr:next(S), Pos)
+                            get_id_from_pos(Item#item.right, Pos)
                     end
             end
     end.
@@ -225,7 +225,7 @@ get_id_set(ItemPtr, Len, IdSet) ->
                 {ok, Item} ->
                     case item:is_deleted(Item) of
                         true ->
-                            get_id_set(item_ptr:next(ItemPtr2), Len, IdSet);
+                            get_id_set(Item#item.right, Len, IdSet);
                         false ->
                             Offset = (item_ptr:get_id(ItemPtr2))#id.clock - Item#item.id#id.clock,
                             case item:len(Item) > Len + Offset of
@@ -233,7 +233,7 @@ get_id_set(ItemPtr, Len, IdSet) ->
                                     {ok, id_set:insert(IdSet, item_ptr:get_id(ItemPtr2), Len)};
                                 false ->
                                     get_id_set(
-                                        item_ptr:next(ItemPtr2),
+                                        Item#item.right,
                                         Len - item:len(Item) + Offset,
                                         id_set:insert(
                                             IdSet,
