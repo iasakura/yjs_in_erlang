@@ -100,11 +100,12 @@ decode_id_range(Bin) ->
                     0 ->
                         {Acc, Bin1};
                     _ ->
-                        {R, Bin2} = var_int:decode_uint(Bin1),
+                        {R, Bin2} = range:decode_range(Bin1),
                         Rec(N - 1, Bin2, [R | Acc])
                 end
             end,
-            Rec(Len, Bin0, [])
+            {Ranges, Rest} = Rec(Len, Bin0, []),
+            {{fragmented, Ranges}, Rest}
     end.
 
 -spec encode_id_set(id_set()) -> binary().
