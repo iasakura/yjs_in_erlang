@@ -171,7 +171,7 @@ get_id_from_pos(Start, Pos) ->
                     ?LOG_INFO("Item: ~p", [Item]),
                     case item:is_deleted(Item) of
                         false ->
-                            case item:len(Item) > Pos - Item#item.id#id.clock of
+                            case item:len(Item) > Pos of
                                 true ->
                                     {ok, #id{
                                         client = Item#item.id#id.client,
