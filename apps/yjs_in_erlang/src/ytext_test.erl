@@ -16,7 +16,8 @@ ytext_test_() ->
             fun test_case3/0,
             fun test_case4/0,
             fun test_case5/0,
-            fun test_case6/0
+            fun test_case6/0,
+            fun test_case7/0
         ]}
     ].
 
@@ -78,3 +79,13 @@ test_case6() ->
     text:insert(YTxn, id:new(ClientId, 2), Text, 1, <<"2">>),
     text:delete(YTxn, Text, 0, 2),
     ?assertEqual(<<"1">>, text:get_string(Text)).
+
+test_case7() ->
+    Doc = doc:new(),
+    Text = doc:get_or_create_text(Doc, <<"text">>),
+    YTxn = doc:transact_mut(Doc),
+    ClientId = state_vector:integer_to_client_id(0),
+    text:insert(YTxn, id:new(ClientId, 0), Text, 0, <<"0">>),
+    text:insert(YTxn, id:new(ClientId, 1), Text, 0, <<"12">>),
+    text:delete(YTxn, Text, 2, 1),
+    ?assertEqual(<<"12">>, text:get_string(Text)).
