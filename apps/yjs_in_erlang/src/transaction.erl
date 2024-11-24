@@ -296,8 +296,12 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                             );
                         false ->
                             case Clock =:= Item#item.id#id.clock of
-                                true -> Deleted = Item;
-                                false -> {ok, {_, Deleted}} = item:splice(Store, Item, Clock - Item#item.id#id.clock)
+                                true ->
+                                    Deleted = Item;
+                                false ->
+                                    {ok, {_, Deleted}} = item:splice(
+                                        Store, Item, Clock - Item#item.id#id.clock
+                                    )
                             end,
                             % 完全に含まれる場合
                             case Deleted#item.id#id.clock + item:len(Deleted) =< ClockEnd of
@@ -315,7 +319,8 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
                                             Store, Deleted, ClockEnd - Deleted#item.id#id.clock
                                         )
                                     of
-                                        undefined -> [];
+                                        undefined ->
+                                            [];
                                         {ok, {NewItem1, NewItem2}} ->
                                             NewTxn0 = Txn#transaction_mut{
                                                 merge_blocks = [
