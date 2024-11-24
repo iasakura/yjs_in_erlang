@@ -1,0 +1,10 @@
+[
+    "../editing-traces/sequential_traces/automerge-paper.json.gz",
+    "../editing-traces/sequential_traces/clownschool_flat.json.gz",
+    "../editing-traces/sequential_traces/friendsforever_flat.json.gz",
+    "../editing-traces/sequential_traces/json-crdt-blog-post.json.gz",
+    "../editing-traces/sequential_traces/json-crdt-patch.json.gz",
+    "../editing-traces/sequential_traces/rustcode.json.gz",
+    "../editing-traces/sequential_traces/seph-blog1.json.gz",
+    "../editing-traces/sequential_traces/sveltecomponent.json.gz"
+]

@@ -19,6 +19,8 @@ logs
 rebar3.crashdump
 *~
 
+*.bin
+
 node_modules
 
 **/temp.erl
