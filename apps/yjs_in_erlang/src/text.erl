@@ -66,22 +66,22 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
                     {ok, Id2} -> {ok, {ok, Id2}}
                 end
         end,
-    ?LOG_INFO("Origin: ~p", [Origin]),
+    ?LOG_DEBUG("Origin: ~p", [Origin]),
     case Origin of
         undefined ->
             ok;
         {ok, OriginId_} ->
-            ?LOG_INFO("Origin ~p, Origin item: ~p", [
+            ?LOG_DEBUG("Origin ~p, Origin item: ~p", [
                 OriginId_, store:get_item(transaction:get_store(Txn), OriginId_)
             ])
     end,
     RightOrigin = get_id_from_pos(Start, Pos),
-    ?LOG_INFO("RightOrigin: ~p", [RightOrigin]),
+    ?LOG_DEBUG("RightOrigin: ~p", [RightOrigin]),
     case RightOrigin of
         undefined ->
             ok;
         {ok, RightOriginId} ->
-            ?LOG_INFO("RightOrigin ~p, RightOrigin item: ~p", [
+            ?LOG_DEBUG("RightOrigin ~p, RightOrigin item: ~p", [
                 RightOriginId, store:get_item(transaction:get_store(Txn), RightOriginId)
             ])
     end,
@@ -89,7 +89,7 @@ insert(Txn, #id{client = Id, clock = Clock}, #y_text{key = Key}, Pos, Str) ->
         undefined ->
             ok;
         {ok, OriginId} ->
-            ?LOG_INFO("Origin item: ~p", [store:get_item(transaction:get_store(Txn), OriginId)])
+            ?LOG_DEBUG("Origin item: ~p", [store:get_item(transaction:get_store(Txn), OriginId)])
     end,
     Item2 = #item{
         id = #id{client = Id, clock = Clock},
@@ -132,20 +132,20 @@ delete(_, _, _, 0) ->
     ok;
 delete(Txn, #y_text{key = Key}, Pos, Len) ->
     {ok, Branch} = store:get_branch(transaction:get_store(Txn), Key),
-    ?LOG_INFO("Branch: ~p", [Branch]),
+    ?LOG_DEBUG("Branch: ~p", [Branch]),
     {ok, IdSet} = get_id_set_from_range(
         transaction:get_store(Txn),
         Branch#branch.start,
         Pos,
         Len
     ),
-    ?LOG_INFO("IdSet: ~p", [IdSet]),
+    ?LOG_DEBUG("IdSet: ~p", [IdSet]),
     % case IdSet of
     %     undefined ->
     %         ok;
     %     {ok, IdRange} ->
     %         maps:foreach(fun (Client, Range) ->
-    %             ?LOG_INFO("Client: ~p, Range: ~p", [Client, Range]),
+    %             ?LOG_DEBUG("Client: ~p, Range: ~p", [Client, Range]),
 
     %         end, IdSet)
     %     end,
@@ -159,7 +159,7 @@ delete(Txn, #y_text{key = Key}, Pos, Len) ->
 -spec get_id_from_pos(option:option(item_ptr:item_ptr()), integer()) ->
     option:option(id:id()).
 get_id_from_pos(Start, Pos) ->
-    ?LOG_INFO("get_id_from_pos: ~p, ~p", [Start, Pos]),
+    ?LOG_DEBUG("get_id_from_pos: ~p, ~p", [Start, Pos]),
     case Start of
         undefined ->
             undefined;
@@ -168,7 +168,7 @@ get_id_from_pos(Start, Pos) ->
                 undefined ->
                     throw("unreachable");
                 {ok, Item} ->
-                    ?LOG_INFO("Item: ~p", [Item]),
+                    ?LOG_DEBUG("Item: ~p", [Item]),
                     case item:is_deleted(Item) of
                         false ->
                             case item:len(Item) > Pos of
@@ -197,19 +197,19 @@ get_id_from_pos(Start, Pos) ->
 ) ->
     option:option(id_set:id_set()).
 get_id_set_from_range(Store, Start, Pos, Len) ->
-    ?LOG_INFO("get_id_set_from_range: ~p, ~p, ~p", [Start, Pos, Len]),
+    ?LOG_DEBUG("get_id_set_from_range: ~p, ~p, ~p", [Start, Pos, Len]),
     case get_id_from_pos(Start, Pos) of
         undefined ->
             undefined;
         {ok, Id} ->
-            ?LOG_INFO("Id: ~p", [Id]),
+            ?LOG_DEBUG("Id: ~p", [Id]),
             get_id_set({ok, item_ptr:new(Store, Id)}, Len, id_set:new())
     end.
 
 -spec get_id_set(option:option(item_ptr:item_ptr()), integer(), id_set:id_set()) ->
     option:option(id_set:id_set()).
 get_id_set(ItemPtr, Len, IdSet) ->
-    ?LOG_INFO("get_id_set: ~p, ~p, ~p", [ItemPtr, Len, IdSet]),
+    ?LOG_DEBUG("get_id_set: ~p, ~p, ~p", [ItemPtr, Len, IdSet]),
     case ItemPtr of
         undefined ->
             case Len of

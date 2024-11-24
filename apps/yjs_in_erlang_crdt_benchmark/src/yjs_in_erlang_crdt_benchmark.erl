@@ -56,50 +56,50 @@ run(StartContent, EndContent, Txns) ->
             Patches = maps:get(<<"patches">>, Txn),
             Next = lists:foldl(
                 fun(Patch, InAcc) ->
-                    PrevText = text:get_string(Str),
+                    % PrevText = text:get_string(Str),
                     [Pos, DeleteNum, InsertStr] = Patch,
-                    ?LOG_INFO("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
-                        Pos, DeleteNum, InsertStr
-                    ]),
+                    % ?LOG_INFO("InsertPos: ~p, DeleteNum: ~p, InsertStr: ~p", [
+                    %     Pos, DeleteNum, InsertStr
+                    % ]),
                     text:delete(YTxn, Str, Pos, DeleteNum),
                     text:insert(YTxn, id:new(Id, InAcc), Str, Pos, InsertStr),
                     % DEBUG
-                    case unicode:characters_to_list(PrevText, utf8) of
-                        S when is_list(S) -> CodePoints = S;
-                        _ ->
-                            throw("invalid text"),
-                            % unreachable
-                            CodePoints = []
-                    end,
-                    case unicode:characters_to_binary(lists:sublist(CodePoints, Pos)) of
-                        Bin when is_binary(Bin) ->
-                            BytePos = byte_size(Bin);
-                        _ ->
-                            throw("invalid text"),
-                            BytePos = 0
-                    end,
-                    case unicode:characters_to_binary(lists:sublist(CodePoints, Pos + DeleteNum)) of
-                        Bin0 when is_binary(Bin0) ->
-                            DeleteBytePos = byte_size(Bin0);
-                        _ ->
-                            throw("invalid text"),
-                            DeleteBytePos = 0
-                    end,
-                    Expected = <<
-                        (binary:part(PrevText, 0, BytePos))/binary,
-                        InsertStr/binary,
-                        (binary:part(PrevText, DeleteBytePos, byte_size(PrevText) - DeleteBytePos))/binary
-                    >>,
-                    NewText = text:get_string(Str),
-                    ?LOG_INFO("~p, ~p", [
-                        Expected, NewText
-                    ]),
-                    case Expected =/= NewText of
-                        true ->
-                            throw(io_lib:format("assert failure: ~p =/= ~p", [Expected, NewText]));
-                        false ->
-                            ok
-                    end,
+                    % case unicode:characters_to_list(PrevText, utf8) of
+                    %     S when is_list(S) -> CodePoints = S;
+                    %     _ ->
+                    %         throw("invalid text"),
+                    %         % unreachable
+                    %         CodePoints = []
+                    % end,
+                    % case unicode:characters_to_binary(lists:sublist(CodePoints, Pos)) of
+                    %     Bin when is_binary(Bin) ->
+                    %         BytePos = byte_size(Bin);
+                    %     _ ->
+                    %         throw("invalid text"),
+                    %         BytePos = 0
+                    % end,
+                    % case unicode:characters_to_binary(lists:sublist(CodePoints, Pos + DeleteNum)) of
+                    %     Bin0 when is_binary(Bin0) ->
+                    %         DeleteBytePos = byte_size(Bin0);
+                    %     _ ->
+                    %         throw("invalid text"),
+                    %         DeleteBytePos = 0
+                    % end,
+                    % Expected = <<
+                    %     (binary:part(PrevText, 0, BytePos))/binary,
+                    %     InsertStr/binary,
+                    %     (binary:part(PrevText, DeleteBytePos, byte_size(PrevText) - DeleteBytePos))/binary
+                    % >>,
+                    % NewText = text:get_string(Str),
+                    % ?LOG_INFO("~p, ~p", [
+                    %     Expected, NewText
+                    % ]),
+                    % case Expected =/= NewText of
+                    %     true ->
+                    %         throw(io_lib:format("assert failure: ~p =/= ~p", [Expected, NewText]));
+                    %     false ->
+                    %         ok
+                    % end,
                     InAcc + util:compute_utf16_length(InsertStr)
                 end,
                 Acc,
