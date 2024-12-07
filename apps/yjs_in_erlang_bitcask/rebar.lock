@@ -1,0 +1,4 @@
+[{<<"bitcask">>,
+  {git,"https://github.com/basho/bitcask.git",
+       {ref,"d84c8d913713da8f02403431217405f84ee1ba22"}},
+  0}].
