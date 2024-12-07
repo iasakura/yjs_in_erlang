@@ -46,10 +46,11 @@ logger_init() ->
     ).
 
 start(_StartType, _StartArgs) ->
-    State = websocket_connection_manager:new(),
+    websocket_connection_manager_sup:start_link(),
+    Manager = whereis(websocket_connection_manager),
     Dispatch = cowboy_router:compile([
         {'_', [
-            {"/ws/[...]", websocket_handler, State}
+            {"/ws/[...]", websocket_handler, Manager}
         ]}
     ]),
     {ok, _} = cowboy:start_clear(http, [{port, 3000}], #{
