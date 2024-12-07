@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         otp_version: ["26.1.2"]
-        rebar3_version: ["3.22.1"]
+        rebar3_version: ["3.24.0"]
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
