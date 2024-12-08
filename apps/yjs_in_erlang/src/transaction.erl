@@ -7,7 +7,8 @@
     apply_delete/2,
     get_store/1,
     get_delete_set/1,
-    delete_item/2
+    delete_item/2,
+    commit/1
 ]).
 -export_type([transaction_mut/0, subdocs/0]).
 
@@ -65,7 +66,11 @@ transaction_loop(State) ->
         {Pid, delete_item, Item} ->
             {Res, NewState} = internal_delete_item(State, Item),
             Pid ! {self(), Res},
-            transaction_loop(NewState)
+            transaction_loop(NewState);
+        {Pid, commit} ->
+            internal_commit(State),
+            Pid ! {self(), ok},
+            transaction_loop(State#transaction_mut{committed = true})
     end.
 
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
@@ -107,6 +112,13 @@ delete_item(Txn, Item) ->
     Txn ! {self(), delete_item, Item},
     receive
         {Txn, Res} -> Res
+    end.
+
+-spec commit(transaction_mut()) -> ok.
+commit(Txn) ->
+    Txn ! {self(), commit},
+    receive
+        {Txn, ok} -> ok
     end.
 
 -spec apply_update(transaction_mut(), update:update()) -> ok.
@@ -391,4 +403,28 @@ internal_add_changed_type(Txn, Parent, ParentSub) ->
             };
         _ ->
             Txn
+    end.
+
+-spec internal_commit(transaction_mut_state()) -> ok.
+internal_commit(Txn) ->
+    Store = Txn#transaction_mut.store,
+    case Txn#transaction_mut.committed of
+        true ->
+            ok;
+        false ->
+            % TODO: 1. Squash delete_set
+            _AfterState = store:get_state_vector(Store),
+            % 2. emit 'beforeObserverCalls'
+            % 3. for each change observed by the transaction call 'afterTransaction'
+            % TxnBr = trigger_branches(Txn),
+            % TxnDeep = trigger_deep(TxnBr),
+            % TODO: 4. try GC
+            % TODO: 5. try merge delete set
+            % TODO: 6. get transaction after state and try to merge to left
+            % TODO: 7. get merge_structs and try to merge to left
+            % TODO: 8. emit 'afterTransactionCleanup'
+            % TODO: 9. emit 'update'
+            % TODO: 10. emit 'updateV2'
+            % TODO: 11. add and remove subdocs
+            ok
     end.

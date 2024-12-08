@@ -33,7 +33,8 @@ new() ->
         subdocs = #{},
         parent = undefined,
         linked_by = #{},
-        ets_manager = ets_manager:new()
+        ets_manager = ets_manager:new(),
+        event_manager = event_manager:start()
     }.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).

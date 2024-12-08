@@ -45,5 +45,6 @@
     % events :: option:option(store_events:store_events()),
     parent :: option:option(id:id()),
     linked_by :: #{id:id() => sets:set(branch:branch())},
-    ets_manager :: ets_manager:ets_manager()
+    ets_manager :: ets_manager:ets_manager(),
+    event_manager :: event_manager:event_manager()
 }).
