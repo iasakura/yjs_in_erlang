@@ -414,17 +414,78 @@ internal_commit(Txn) ->
         false ->
             % TODO: 1. Squash delete_set
             _AfterState = store:get_state_vector(Store),
-            % 2. emit 'beforeObserverCalls'
-            % 3. for each change observed by the transaction call 'afterTransaction'
-            % TxnBr = trigger_branches(Txn),
-            % TxnDeep = trigger_deep(TxnBr),
+            % TODO: 2. emit 'beforeObserverCalls'
+            % TODO: 3. for each change observed by the transaction call 'afterTransaction'
+            % TODO: TxnBr = trigger_branches(Txn),
+            % TODO: TxnDeep = trigger_deep(TxnBr),
             % TODO: 4. try GC
             % TODO: 5. try merge delete set
             % TODO: 6. get transaction after state and try to merge to left
             % TODO: 7. get merge_structs and try to merge to left
             % TODO: 8. emit 'afterTransactionCleanup'
-            % TODO: 9. emit 'update'
+            % 9. emit 'update'
+            trigger_update_v1(Txn),
             % TODO: 10. emit 'updateV2'
             % TODO: 11. add and remove subdocs
             ok
     end.
+
+-spec trigger_update_v1(transaction_mut_state()) -> ok.
+trigger_update_v1(Txn) ->
+    Store = Txn#transaction_mut.store,
+    Manager = Store#store.event_manager,
+    case event_manager:has_subscribers(Manager, update_v1) of
+        false ->
+            ok;
+        true ->
+            Update = create_update(Txn),
+            event_manager:notify_update_v1(Manager, Update)
+    end.
+
+-spec create_update(transaction_mut_state()) -> update:update().
+create_update(Txn) ->
+    Store = Txn#transaction_mut.store,
+    Blocks = blocks_from(Txn#transaction_mut.before_state, Store#store.blocks),
+    DeleteSet = Txn#transaction_mut.delete_set,
+    #update{
+        update_blocks = Blocks,
+        delete_set = DeleteSet
+    }.
+
+-spec blocks_from(state_vector:state_vector(), block_store:block_store()) -> update:update_blocks().
+blocks_from(Before, Blocks) ->
+    LocalSV = block_store:get_state_vector(Blocks),
+    Diff = diff(LocalSV, Before),
+    maps:map(
+        fun(ClientId, Clock) ->
+            case block_store:get_client(Blocks, ClientId) of
+                undefined ->
+                    [];
+                {ok, ClientBlockList} ->
+                    case block_store:find_pivot(ClientBlockList, Clock) of
+                        undefined ->
+                            [];
+                        {ok, {Start, _}} ->
+                            BlockCells = ets:select(ClientBlockList, [
+                                {{'$1', '$2'}, [{'>=', '$1', Start}], ['$2']}
+                            ]),
+                            lists:map(
+                                fun(Cell) ->
+                                    case Cell of
+                                        % TODO: trim start by Clock
+                                        {_, {block, Item}} ->
+                                            Item;
+                                        {_, {gc, Gc}} ->
+                                            {gc, #block_range{
+                                                id = #id{client = ClientId, clock = Gc#gc.start},
+                                                len = Gc#gc.end_ - Gc#gc.start
+                                            }}
+                                    end
+                                end,
+                                BlockCells
+                            )
+                    end
+            end
+        end,
+        Diff
+    ).

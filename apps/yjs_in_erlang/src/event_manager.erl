@@ -9,13 +9,12 @@
 
 %% Callbacks for `gen_server`
 -export([init/1, handle_call/3, handle_cast/2, start/0]).
+-export([subscribe/2, unsubscribe/2, has_subscribers/2, notify_update_v1/2]).
 -export_type([event_manager/0]).
 
 -opaque event_manager() :: pid().
 
-% -type event() ::
-%     {update_v1, update:update()}
-%     | {node, branch:branch(), transaction:transaction_mut()}.
+-type event_target() :: update_v1.
 
 -spec init(list()) -> {ok, #state{}}.
 init(_Args) ->
@@ -27,6 +26,8 @@ handle_call({unsubscribe, update}, From, State) ->
     {reply, ok, State#state{
         update_v1_subscribers = lists:delete(From, State#state.update_v1_subscribers)
     }};
+handle_call({has_subscribers, update}, _From, State) ->
+    {reply, length(State#state.update_v1_subscribers) > 0, State};
 handle_call(Request, _From, State) ->
     {reply, {error, {unknown_request, Request}}, State}.
 
@@ -58,3 +59,19 @@ handle_cast({notify, node, Node, Txn}, State) ->
 start() ->
     {ok, Pid} = gen_server:start_link(?MODULE, [], []),
     Pid.
+
+-spec subscribe(event_manager(), event_target()) -> ok.
+subscribe(Manager, Event) ->
+    gen_server:call(Manager, {subscribe, Event}).
+
+-spec unsubscribe(event_manager(), event_target()) -> ok.
+unsubscribe(Manager, Event) ->
+    gen_server:call(Manager, {unsubscribe, Event}).
+
+-spec has_subscribers(event_manager(), event_target()) -> boolean().
+has_subscribers(Manager, Event) ->
+    gen_server:call(Manager, {has_subscribers, Event}).
+
+-spec notify_update_v1(event_manager(), update:update()) -> ok.
+notify_update_v1(Manager, Update) ->
+    gen_server:cast(Manager, {notify, update_v1, Update}).
