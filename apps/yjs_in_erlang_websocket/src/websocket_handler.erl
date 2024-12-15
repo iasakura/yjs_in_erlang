@@ -57,7 +57,7 @@ websocket_handle(_, Doc) ->
 -spec websocket_info(any(), websocket_connection_manager:ws_shared_doc()) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
 websocket_info({send, Update}, State) ->
-    % eqwalizer:ignore
+    % eqwalizer:ignore `Update`. Expression has type: term() Context expected type: protocol:sync_messages()
     {[{binary, <<(protocol:encode_sync_message(Update))/binary>>}], State};
 websocket_info(_, State) ->
     {[], State}.

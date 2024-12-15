@@ -8,7 +8,8 @@
     get_store/1,
     get_delete_set/1,
     delete_item/2,
-    commit/1
+    commit/1,
+    get_owner/1
 ]).
 -export_type([transaction_mut/0, subdocs/0]).
 
@@ -39,7 +40,8 @@ new_state(Doc) ->
         changed_parent_types = [],
         subdocs = undefined,
         doc = Doc,
-        committed = false
+        committed = false,
+        owner = self()
     }.
 
 -spec transaction_loop(transaction_mut_state()) -> no_return().
@@ -68,9 +70,12 @@ transaction_loop(State) ->
             Pid ! {self(), Res},
             transaction_loop(NewState);
         {Pid, commit} ->
-            internal_commit(State),
+            internal_commit(State, self()),
             Pid ! {self(), ok},
-            transaction_loop(State#transaction_mut{committed = true})
+            transaction_loop(State#transaction_mut{committed = true});
+        {Pid, get_owner} ->
+            Pid ! {self(), State#transaction_mut.owner},
+            transaction_loop(State)
     end.
 
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
@@ -403,10 +408,10 @@ internal_add_changed_type(Txn, Parent, ParentSub) ->
             Txn
     end.
 
--spec internal_commit(transaction_mut_state()) -> ok.
-internal_commit(Txn) ->
-    Store = Txn#transaction_mut.store,
-    case Txn#transaction_mut.committed of
+-spec internal_commit(transaction_mut_state(), transaction_mut()) -> ok.
+internal_commit(State, Txn) ->
+    Store = State#transaction_mut.store,
+    case State#transaction_mut.committed of
         true ->
             ok;
         false ->
@@ -422,85 +427,37 @@ internal_commit(Txn) ->
             % TODO: 7. get merge_structs and try to merge to left
             % TODO: 8. emit 'afterTransactionCleanup'
             % 9. emit 'update'
-            trigger_update_v1(Txn),
+            trigger_update_v1(State, Txn),
             % TODO: 10. emit 'updateV2'
             % TODO: 11. add and remove subdocs
             ok
     end.
 
--spec trigger_update_v1(transaction_mut_state()) -> ok.
-trigger_update_v1(Txn) ->
-    Store = Txn#transaction_mut.store,
+-spec trigger_update_v1(transaction_mut_state(), transaction_mut()) -> ok.
+trigger_update_v1(State, Txn) ->
+    Store = State#transaction_mut.store,
     Manager = Store#store.event_manager,
     case event_manager:has_subscribers(Manager, update_v1) of
         false ->
             ok;
         true ->
-            Update = create_update(Txn),
-            event_manager:notify_update_v1(Manager, Update)
+            Update = create_update(State),
+            event_manager:notify_update_v1(Manager, Update, Txn)
     end.
 
 -spec create_update(transaction_mut_state()) -> update:update().
 create_update(Txn) ->
     Store = Txn#transaction_mut.store,
-    Blocks = blocks_from(Txn#transaction_mut.before_state, Store#store.blocks),
+    Blocks = block_store:blocks_from(Txn#transaction_mut.before_state, Store#store.blocks),
     DeleteSet = Txn#transaction_mut.delete_set,
     #update{
         update_blocks = Blocks,
         delete_set = DeleteSet
     }.
 
--spec blocks_from(state_vector:state_vector(), block_store:block_store()) -> update:update_blocks().
-blocks_from(Before, Blocks) ->
-    LocalSV = block_store:get_state_vector(Blocks),
-    Diff = diff_state_vector(LocalSV, Before),
-    maps:map(
-        fun(ClientId, Clock) ->
-            case block_store:get_client(Blocks, ClientId) of
-                undefined ->
-                    [];
-                {ok, ClientBlockList} ->
-                    case block_store:find_pivot(ClientBlockList, Clock) of
-                        undefined ->
-                            [];
-                        {ok, {Start, _}} ->
-                            ?LOG_DEBUG("get_all: ~p", [block_store:get_all(Blocks)]),
-                            BlockCells = block_store:get_from(ClientBlockList, Start),
-                            lists:map(
-                                fun(Cell) ->
-                                    case Cell of
-                                        % TODO: trim start by Clock
-                                        {block, Item} ->
-                                            {item, Item};
-                                        {gc, Gc} ->
-                                            {gc, #block_range{
-                                                id = #id{client = ClientId, clock = Gc#gc.start},
-                                                len = Gc#gc.end_ - Gc#gc.start
-                                            }}
-                                    end
-                                end,
-                                BlockCells
-                            )
-                    end
-            end
-        end,
-        Diff
-    ).
-
-%% @doc diff_state_vector
-%%  遅れているclockをもつclientを集めてその遅れている方のclockを返す
--spec diff_state_vector(state_vector:state_vector(), state_vector:state_vector()) ->
-    state_vector:state_vector().
-diff_state_vector(Local, Remote) ->
-    maps:fold(
-        fun(ClientId, Clock, Acc) ->
-            case state_vector:get(Remote, ClientId) of
-                RemoteClock when RemoteClock < Clock ->
-                    state_vector:set(Acc, ClientId, RemoteClock);
-                _ ->
-                    Acc
-            end
-        end,
-        state_vector:new(),
-        Local
-    ).
+-spec get_owner(transaction_mut()) -> pid().
+get_owner(Txn) ->
+    Txn ! {self(), get_owner},
+    receive
+        {Txn, Owner} -> Owner
+    end.

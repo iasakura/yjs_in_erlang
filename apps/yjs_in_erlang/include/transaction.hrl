@@ -52,5 +52,6 @@
     subdocs :: option:option(transaction:subdocs()),
     % origin:: option:option(origin:origin()),
     doc :: doc:doc(),
-    committed :: boolean()
+    committed :: boolean(),
+    owner :: pid()
 }).
