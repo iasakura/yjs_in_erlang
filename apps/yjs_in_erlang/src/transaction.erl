@@ -47,7 +47,7 @@ transaction_loop(State) ->
     receive
         {Pid, apply_delete, Txn, DeleteSet} ->
             DeleteSet0 = internal_apply_delete(State, DeleteSet),
-            ?LOG_DEBUG("DeleteSet: ~p", [DeleteSet0]),
+
             Pid ! {Txn, DeleteSet0},
             transaction_loop(State);
         {Pid, add_changed_type, Txn, Parent, ParentSub} ->
@@ -173,12 +173,10 @@ apply_update(Txn, Update) ->
     NewPendingDs =
         case Store#store.pending_ds of
             undefined ->
-                % eqwalizer:ignore: Unbound rec: update
                 option:map(fun(U) -> U#update.delete_set end, RemainingDs);
             {ok, PendingDs} ->
                 Ds2 = apply_delete(Txn, PendingDs),
                 case RemainingDs of
-                    % eqwalizer:ignore: Unbound rec: update
                     {ok, Ds1} -> {ok, id_set:merge_id_set(Ds1#update.delete_set, Ds2)};
                     undefined -> {ok, Ds2}
                 end
@@ -455,7 +453,7 @@ create_update(Txn) ->
 -spec blocks_from(state_vector:state_vector(), block_store:block_store()) -> update:update_blocks().
 blocks_from(Before, Blocks) ->
     LocalSV = block_store:get_state_vector(Blocks),
-    Diff = diff(LocalSV, Before),
+    Diff = diff_state_vector(LocalSV, Before),
     maps:map(
         fun(ClientId, Clock) ->
             case block_store:get_client(Blocks, ClientId) of
@@ -466,16 +464,15 @@ blocks_from(Before, Blocks) ->
                         undefined ->
                             [];
                         {ok, {Start, _}} ->
-                            BlockCells = ets:select(ClientBlockList, [
-                                {{'$1', '$2'}, [{'>=', '$1', Start}], ['$2']}
-                            ]),
+                            ?LOG_DEBUG("get_all: ~p", [block_store:get_all(Blocks)]),
+                            BlockCells = block_store:get_from(ClientBlockList, Start),
                             lists:map(
                                 fun(Cell) ->
                                     case Cell of
                                         % TODO: trim start by Clock
-                                        {_, {block, Item}} ->
-                                            Item;
-                                        {_, {gc, Gc}} ->
+                                        {block, Item} ->
+                                            {item, Item};
+                                        {gc, Gc} ->
                                             {gc, #block_range{
                                                 id = #id{client = ClientId, clock = Gc#gc.start},
                                                 len = Gc#gc.end_ - Gc#gc.start
@@ -488,4 +485,22 @@ blocks_from(Before, Blocks) ->
             end
         end,
         Diff
+    ).
+
+%% @doc diff_state_vector
+%%  遅れているclockをもつclientを集めてその遅れている方のclockを返す
+-spec diff_state_vector(state_vector:state_vector(), state_vector:state_vector()) ->
+    state_vector:state_vector().
+diff_state_vector(Local, Remote) ->
+    maps:fold(
+        fun(ClientId, Clock, Acc) ->
+            case state_vector:get(Remote, ClientId) of
+                RemoteClock when RemoteClock < Clock ->
+                    state_vector:set(Acc, ClientId, RemoteClock);
+                _ ->
+                    Acc
+            end
+        end,
+        state_vector:new(),
+        Local
     ).

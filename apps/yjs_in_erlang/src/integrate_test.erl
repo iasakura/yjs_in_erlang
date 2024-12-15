@@ -26,7 +26,7 @@ integrate_test_case0() ->
             117, 101, 66, 0>>
     ),
     transaction:apply_update(Txn, Update),
-    ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
+
     ok.
 
 integrate_test_case1() ->
@@ -35,9 +35,9 @@ integrate_test_case1() ->
     Txn = transaction:new(Doc),
     {Update, <<"">>} = update:decode_update(BinaryContent),
     transaction:apply_update(Txn, Update),
-    ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
+
     Text = doc:get_or_create_text(Doc, <<"text">>),
-    ?LOG_DEBUG("text: ~p", [text:get_string(Text)]),
+
     ?assertEqual(
         <<"あいうabcえお"/utf8>>,
         text:get_string(Text)
@@ -53,7 +53,7 @@ integrate_test_case2() ->
     Txn = transaction:new(Doc),
     transaction:apply_update(Txn, UpdateA),
     transaction:apply_update(Txn, UpdateB),
-    ?LOG_DEBUG("store: ~p", [block_store:get_all(Doc#doc.store#store.blocks)]),
+
     Text = doc:get_or_create_text(Doc, <<"text">>),
     ?assertEqual(<<"abcxyz">>, text:get_string(Text)),
     ok.

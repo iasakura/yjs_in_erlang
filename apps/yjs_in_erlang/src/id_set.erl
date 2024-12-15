@@ -88,7 +88,6 @@ encode_id_range({fragmented, Ranges}) ->
 
 -spec decode_id_range(binary()) -> {id_range(), binary()}.
 decode_id_range(Bin) ->
-    ?LOG_DEBUG("decode_id_range: ~p", [Bin]),
     {Len, Bin0} = var_int:decode_uint(Bin),
     case Len of
         1 ->
@@ -110,7 +109,6 @@ decode_id_range(Bin) ->
 
 -spec encode_id_set(id_set()) -> binary().
 encode_id_set(IdSet) ->
-    ?LOG_DEBUG("encode_id_set: ~p", [IdSet]),
     LenBin = var_int:encode_uint(maps:size(IdSet)),
     Bin = maps:fold(
         fun(ClientId, Ranges, Acc) ->

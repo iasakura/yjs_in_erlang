@@ -3,8 +3,6 @@
 -export([decode_any/1, encode_any/1]).
 -export_type([any_type/0]).
 
--include_lib("kernel/include/logger.hrl").
-
 -type any_type() ::
     null
     | undefined
@@ -19,7 +17,7 @@
 -spec decode_any(binary()) -> {any_type(), binary()}.
 decode_any(Bin) ->
     {Type, Rest} = fixed_int:read_u8(Bin),
-    ?LOG_DEBUG("Type: ~p", [Type]),
+
     case Type of
         127 ->
             {undefined, Rest};

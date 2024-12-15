@@ -11,7 +11,8 @@
     find_pivot/2,
     get_state_vector/1,
     push_gc/2,
-    get_all/1
+    get_all/1,
+    get_from/2
 ]).
 -export_type([block_store/0, client_block_list/0]).
 
@@ -190,3 +191,9 @@ get_all(BlockStore) ->
         #{},
         BlockStore#block_store.table
     ).
+
+-spec get_from(client_block_list(), integer()) -> [block:block_cell()].
+get_from(Table, Clock) ->
+    ets:select(Table, [
+        {{'_', '$1', '$2'}, [{'>=', '$1', Clock}], ['$2']}
+    ]).

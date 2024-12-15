@@ -20,13 +20,13 @@
 init(_Args) ->
     {ok, #state{update_v1_subscribers = [], node_subscribers = #{}}}.
 
-handle_call({subscribe, update}, From, State) ->
+handle_call({subscribe, update_v1}, {From, _}, State) ->
     {reply, ok, State#state{update_v1_subscribers = [From | State#state.update_v1_subscribers]}};
-handle_call({unsubscribe, update}, From, State) ->
+handle_call({unsubscribe, update_v1}, {From, _}, State) ->
     {reply, ok, State#state{
         update_v1_subscribers = lists:delete(From, State#state.update_v1_subscribers)
     }};
-handle_call({has_subscribers, update}, _From, State) ->
+handle_call({has_subscribers, update_v1}, _From, State) ->
     {reply, length(State#state.update_v1_subscribers) > 0, State};
 handle_call(Request, _From, State) ->
     {reply, {error, {unknown_request, Request}}, State}.
