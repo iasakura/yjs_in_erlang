@@ -33,7 +33,7 @@ transaction_tests(_Config) ->
     transaction:commit(YTxn2),
 
     receive
-        {notify, update_v1, Update} ->
+        {notify, update_v1, Update, YTxn1} ->
             3 = maps:size(Update#update.update_blocks),
             #{0 := [{item, Block0}], 1 := [{item, Block1}], 2 := [{item, Block2}]} =
                 Update#update.update_blocks,
@@ -44,7 +44,7 @@ transaction_tests(_Config) ->
     end,
 
     receive
-        {notify, update_v1, UpdateAfter} ->
+        {notify, update_v1, UpdateAfter, YTxn2} ->
             3 = maps:size(UpdateAfter#update.update_blocks),
             #{0 := [{item, BlockAfter0}], 1 := [{item, BlockAfter1}], 2 := [{item, BlockAfter2}]} =
                 UpdateAfter#update.update_blocks,

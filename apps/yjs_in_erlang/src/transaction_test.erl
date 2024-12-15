@@ -17,7 +17,7 @@ transaction_test() ->
     transaction:commit(YTxn),
 
     receive
-        {notify, update_v1, Update} ->
+        {notify, update_v1, Update, YTxn} ->
             ?assertEqual(maps:size(Update#update.update_blocks), 1),
             #{0 := [{item, Block}]} = Update#update.update_blocks,
             ?assertEqual(Block#item.content, {string, <<"test">>})
