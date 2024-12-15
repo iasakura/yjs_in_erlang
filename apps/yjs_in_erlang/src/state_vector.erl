@@ -9,6 +9,7 @@
     encode_client_id/1,
     encode_state_vector/1,
     decode_state_vector/1,
+    set/3,
     set_min/3,
     set_max/3,
     get/2,
@@ -45,7 +46,6 @@ encode_state_vector(SV) ->
 
 -spec decode_state_vector(binary()) -> {state_vector(), binary()}.
 decode_state_vector(Bin) ->
-    ?LOG_DEBUG("Bin: ~p", [Bin]),
     {Len, Bin0} = var_int:decode_uint(Bin),
     Rec = fun Rec(N, Bin1, Acc) ->
         case N of
@@ -58,6 +58,10 @@ decode_state_vector(Bin) ->
         end
     end,
     Rec(Len, Bin0, #{}).
+
+-spec set(state_vector(), client_id(), integer()) -> state_vector().
+set(SV, ClientId, Clock) ->
+    maps:put(ClientId, Clock, SV).
 
 -spec set_min(state_vector(), client_id(), integer()) -> state_vector().
 set_min(SV, ClientId, Clock) ->

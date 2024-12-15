@@ -1,7 +1,7 @@
 -module(update).
 
 -export([new/0, decode_update/1, encode_update/1, integrate/2, merge_update/1]).
--export_type([update/0, pending_update/0, delete_set/0, block_range/0]).
+-export_type([update/0, update_blocks/0, pending_update/0, delete_set/0, block_range/0]).
 
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
@@ -132,7 +132,7 @@ decode_block(Id, Bin) ->
             {{gc, #block_range{id = Id, len = Len}}, Rest0};
         Info ->
             CantCopyParentInfo = Info band (?HAS_RIGHT_ORIGIN bor ?HAS_ORIGIN) =:= 0,
-            ?LOG_DEBUG("Info: ~p, CantCopyParentInfo: ~p", [Info, CantCopyParentInfo]),
+
             {Origin, RestO} =
                 case Info band ?HAS_ORIGIN of
                     0 ->
@@ -172,7 +172,6 @@ decode_block(Id, Bin) ->
                         {undefined, RestPA}
                 end,
 
-            ?LOG_DEBUG("Parent: ~p, ParentSub: ~p", [Parent, ParentSub]),
             {Content, RestItem} = item_content:decode(RestPS, Info),
             Item = item:new_item(
                 Id,
@@ -256,13 +255,6 @@ integrate_loop(
     UnappliedBlockStack,
     Store
 ) ->
-    ?LOG_DEBUG(
-        "CurBlock: ~p, CurTarget: ~p, ClientBlockIds: ~p, LocalSV: ~p, MissingSV: ~p, Remaining: ~p, UnappliedBlockStack: ~p",
-        [CurBlock, CurTarget, ClientBlockIds, LocalSV, MissingSV, Remaining, UnappliedBlockStack]
-    ),
-    ?LOG_DEBUG(
-        "store: ~p", [block_store:get_all(Store#store.blocks)]
-    ),
     case CurBlock of
         undefined ->
             case Remaining of
@@ -573,7 +565,6 @@ return_stack(
     {option:option(pending_update()), option:option(update())}.
 integrate(Update, Txn) ->
     RemainingBlocks = begin
-        ?LOG_DEBUG("Update: ~p", [Update#update.update_blocks]),
         case Update#update.update_blocks of
             M when map_size(M) =:= 0 ->
                 undefined;

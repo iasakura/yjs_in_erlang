@@ -57,7 +57,7 @@ handle_call({get_clients, DocId}, _From, State) ->
 handle_call({broadcast, DocId, Msg}, From, State) ->
     Clients = get_clients_impl(State, DocId),
     OtherClients = [Client || Client <- Clients, Client /= From],
-    ?LOG_DEBUG("Send update to ~p", [OtherClients]),
+
     lists:foreach(fun(Client) -> Client ! Msg end, OtherClients),
     {reply, ok, State}.
 

@@ -1,6 +1,6 @@
 -module(doc).
 
--export([new/0, get_or_create_text/2, transact_mut/1, get_update/2]).
+-export([new/0, get_or_create_text/2, transact_mut/1, get_update/2, subscribe_update_v1/1]).
 -export_type([doc/0]).
 
 -include("../include/records.hrl").
@@ -77,8 +77,11 @@ get_update(Doc, _StateVector) ->
         end,
         AllBlocksMap
     ),
-    % eqwalizer:ignore: Unbound rec: update
     #update{
         update_blocks = UpdateBlocks,
         delete_set = DeleteSet
     }.
+
+-spec subscribe_update_v1(doc()) -> ok.
+subscribe_update_v1(Doc) ->
+    store:subscribe_update_v1(Doc#doc.store).

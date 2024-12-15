@@ -14,7 +14,6 @@
 
 -import(util, [get_item_from_link/1, get_item_from_link/2]).
 
--include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
 
@@ -154,7 +153,7 @@ integrate_(Item, Txn, Offset) ->
             false ->
                 Item
         end,
-    ?LOG_DEBUG("item: ~p", [Item0]),
+
     ParentOpt =
         case Item0#item.parent of
             {named, Name} ->
@@ -173,7 +172,6 @@ integrate_(Item, Txn, Offset) ->
             {unknown} ->
                 throw("return true")
         end,
-    ?LOG_DEBUG("parent: ~p", [ParentOpt]),
 
     Left = get_item_from_link(Item0#item.left),
     Right = get_item_from_link(Item0#item.right),
@@ -207,10 +205,9 @@ integrate_(Item, Txn, Offset) ->
                     true ->
                         Item0
                 end,
-            ?LOG_DEBUG("item2: ~p", [Item2]),
-            ?LOG_DEBUG("store before: ~p", [block_store:get_all(Store#store.blocks)]),
+
             store:put_item(Store, Item2),
-            ?LOG_DEBUG("store after: ~p", [block_store:get_all(Store#store.blocks)]),
+
             Item3 = tweak_parent_sub(Item2),
             reconnect_left_right(Txn, Parent, Item3),
             adjust_length_of_parent(Store, Parent, Item3),
@@ -254,12 +251,8 @@ compute_left(Store, ParentRef, This, Left, Right) ->
                         get_item_from_link(ParentRef#branch.start)
                 end
         end,
-    ?LOG_DEBUG("compute_left: ~p", [O]),
 
     Loop1 = fun Loop(C, CurLeft, ItemBeforeOrigin, ConflictingItems) ->
-        ?LOG_DEBUG("Loop: ~p, ~p, ~p, ~p, ~p", [
-            This, C, CurLeft, ItemBeforeOrigin, ConflictingItems
-        ]),
         case C of
             undefined ->
                 CurLeft;
@@ -324,7 +317,7 @@ compute_left(Store, ParentRef, This, Left, Right) ->
         end
     end,
     Res = Loop1(O, Left, #{}, #{}),
-    ?LOG_DEBUG("compute_left: ~p", [Res]),
+
     Res.
 
 -spec tweak_parent_sub(
@@ -363,7 +356,7 @@ tweak_parent_sub(Item) ->
 ) -> true.
 reconnect_left_right(Txn, Parent, This) ->
     Store = transaction:get_store(Txn),
-    ?LOG_DEBUG("reconnect_left_right: ~p", [This]),
+
     case get_item_from_link(This#item.left) of
         {ok, Left} ->
             store:put_item(

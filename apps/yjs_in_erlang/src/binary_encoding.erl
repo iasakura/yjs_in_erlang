@@ -1,16 +1,13 @@
 -module(binary_encoding).
 
--include_lib("kernel/include/logger.hrl").
-
 -export([decode_string/1, encode_string/1, decode_buf/1, encode_buf/1]).
 
 % 多分いらない
 -spec decode_string(binary()) -> {binary(), binary()}.
 decode_string(Bin) ->
     {Len, B} = var_int:decode_uint(Bin),
-    ?LOG_DEBUG("Len: ~p, B: ~p", [Len, B]),
+
     Loop = fun Loop(Rest, RestLen, Acc) ->
-        ?LOG_DEBUG("Rest: ~p, Acc: ~p", [Rest, Acc]),
         case RestLen of
             0 ->
                 {Acc, Rest};

@@ -21,13 +21,14 @@ decode_update_test_case1() ->
             117, 101, 66, 0>>
     ),
     Expected = {
-        % eqwalizer:ignore Unbound rec: update
         #update{
             update_blocks = #{
-                2026372272 =>
+                state_vector:integer_to_client_id(2026372272) =>
                     [
                         {item, #item{
-                            id = #id{client = 2026372272, clock = 0},
+                            id = #id{
+                                client = state_vector:integer_to_client_id(2026372272), clock = 0
+                            },
                             len = 1,
                             left = undefined,
                             right = undefined,
@@ -52,13 +53,12 @@ decode_update_test_case1() ->
     ).
 
 encode_update_test_case1() ->
-    % eqwalizer:ignore Unbound rec: update
     Update = #update{
         update_blocks = #{
-            2026372272 =>
+            state_vector:integer_to_client_id(2026372272) =>
                 [
                     {item, #item{
-                        id = #id{client = 2026372272, clock = 0},
+                        id = #id{client = state_vector:integer_to_client_id(2026372272), clock = 0},
                         len = 1,
                         left = undefined,
                         right = undefined,

@@ -35,7 +35,7 @@ len(_) -> 1.
 -spec decode(binary(), integer()) -> {item_content(), binary()}.
 decode(Bin, RefNum) ->
     % Show RefNum in hex format.
-    ?LOG_DEBUG("RefNum: ~p", [RefNum]),
+
     case RefNum band 2#1111 of
         ?BLOCK_ITEM_BINARY_REF_NUMBER ->
             {Buf, Rest} = binary_encoding:decode_buf(Bin),

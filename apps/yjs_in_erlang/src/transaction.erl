@@ -47,7 +47,7 @@ transaction_loop(State) ->
     receive
         {Pid, apply_delete, Txn, DeleteSet} ->
             DeleteSet0 = internal_apply_delete(State, DeleteSet),
-            ?LOG_DEBUG("DeleteSet: ~p", [DeleteSet0]),
+
             Pid ! {Txn, DeleteSet0},
             transaction_loop(State);
         {Pid, add_changed_type, Txn, Parent, ParentSub} ->
@@ -173,12 +173,10 @@ apply_update(Txn, Update) ->
     NewPendingDs =
         case Store#store.pending_ds of
             undefined ->
-                % eqwalizer:ignore: Unbound rec: update
                 option:map(fun(U) -> U#update.delete_set end, RemainingDs);
             {ok, PendingDs} ->
                 Ds2 = apply_delete(Txn, PendingDs),
                 case RemainingDs of
-                    % eqwalizer:ignore: Unbound rec: update
                     {ok, Ds1} -> {ok, id_set:merge_id_set(Ds1#update.delete_set, Ds2)};
                     undefined -> {ok, Ds2}
                 end
@@ -414,17 +412,95 @@ internal_commit(Txn) ->
         false ->
             % TODO: 1. Squash delete_set
             _AfterState = store:get_state_vector(Store),
-            % 2. emit 'beforeObserverCalls'
-            % 3. for each change observed by the transaction call 'afterTransaction'
-            % TxnBr = trigger_branches(Txn),
-            % TxnDeep = trigger_deep(TxnBr),
+            % TODO: 2. emit 'beforeObserverCalls'
+            % TODO: 3. for each change observed by the transaction call 'afterTransaction'
+            % TODO: TxnBr = trigger_branches(Txn),
+            % TODO: TxnDeep = trigger_deep(TxnBr),
             % TODO: 4. try GC
             % TODO: 5. try merge delete set
             % TODO: 6. get transaction after state and try to merge to left
             % TODO: 7. get merge_structs and try to merge to left
             % TODO: 8. emit 'afterTransactionCleanup'
-            % TODO: 9. emit 'update'
+            % 9. emit 'update'
+            trigger_update_v1(Txn),
             % TODO: 10. emit 'updateV2'
             % TODO: 11. add and remove subdocs
             ok
     end.
+
+-spec trigger_update_v1(transaction_mut_state()) -> ok.
+trigger_update_v1(Txn) ->
+    Store = Txn#transaction_mut.store,
+    Manager = Store#store.event_manager,
+    case event_manager:has_subscribers(Manager, update_v1) of
+        false ->
+            ok;
+        true ->
+            Update = create_update(Txn),
+            event_manager:notify_update_v1(Manager, Update)
+    end.
+
+-spec create_update(transaction_mut_state()) -> update:update().
+create_update(Txn) ->
+    Store = Txn#transaction_mut.store,
+    Blocks = blocks_from(Txn#transaction_mut.before_state, Store#store.blocks),
+    DeleteSet = Txn#transaction_mut.delete_set,
+    #update{
+        update_blocks = Blocks,
+        delete_set = DeleteSet
+    }.
+
+-spec blocks_from(state_vector:state_vector(), block_store:block_store()) -> update:update_blocks().
+blocks_from(Before, Blocks) ->
+    LocalSV = block_store:get_state_vector(Blocks),
+    Diff = diff_state_vector(LocalSV, Before),
+    maps:map(
+        fun(ClientId, Clock) ->
+            case block_store:get_client(Blocks, ClientId) of
+                undefined ->
+                    [];
+                {ok, ClientBlockList} ->
+                    case block_store:find_pivot(ClientBlockList, Clock) of
+                        undefined ->
+                            [];
+                        {ok, {Start, _}} ->
+                            ?LOG_DEBUG("get_all: ~p", [block_store:get_all(Blocks)]),
+                            BlockCells = block_store:get_from(ClientBlockList, Start),
+                            lists:map(
+                                fun(Cell) ->
+                                    case Cell of
+                                        % TODO: trim start by Clock
+                                        {block, Item} ->
+                                            {item, Item};
+                                        {gc, Gc} ->
+                                            {gc, #block_range{
+                                                id = #id{client = ClientId, clock = Gc#gc.start},
+                                                len = Gc#gc.end_ - Gc#gc.start
+                                            }}
+                                    end
+                                end,
+                                BlockCells
+                            )
+                    end
+            end
+        end,
+        Diff
+    ).
+
+%% @doc diff_state_vector
+%%  遅れているclockをもつclientを集めてその遅れている方のclockを返す
+-spec diff_state_vector(state_vector:state_vector(), state_vector:state_vector()) ->
+    state_vector:state_vector().
+diff_state_vector(Local, Remote) ->
+    maps:fold(
+        fun(ClientId, Clock, Acc) ->
+            case state_vector:get(Remote, ClientId) of
+                RemoteClock when RemoteClock < Clock ->
+                    state_vector:set(Acc, ClientId, RemoteClock);
+                _ ->
+                    Acc
+            end
+        end,
+        state_vector:new(),
+        Local
+    ).
