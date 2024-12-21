@@ -12,7 +12,8 @@
     get_state_vector/1,
     push_gc/2,
     get_all/1,
-    get_from/2
+    get_from/2,
+    blocks_from/2
 ]).
 -export_type([block_store/0, client_block_list/0]).
 
@@ -197,3 +198,57 @@ get_from(Table, Clock) ->
     ets:select(Table, [
         {{'_', '$1', '$2'}, [{'>=', '$1', Clock}], ['$2']}
     ]).
+
+-spec blocks_from(state_vector:state_vector(), block_store:block_store()) -> update:update_blocks().
+blocks_from(Before, Blocks) ->
+    LocalSV = block_store:get_state_vector(Blocks),
+    Diff = diff_state_vector(LocalSV, Before),
+    maps:map(
+        fun(ClientId, Clock) ->
+            case block_store:get_client(Blocks, ClientId) of
+                undefined ->
+                    [];
+                {ok, ClientBlockList} ->
+                    case block_store:find_pivot(ClientBlockList, Clock) of
+                        undefined ->
+                            [];
+                        {ok, {Start, _}} ->
+                            BlockCells = block_store:get_from(ClientBlockList, Start),
+                            lists:map(
+                                fun(Cell) ->
+                                    case Cell of
+                                        % TODO: trim start by Clock
+                                        {block, Item} ->
+                                            {item, Item};
+                                        {gc, Gc} ->
+                                            {gc, #block_range{
+                                                id = #id{client = ClientId, clock = Gc#gc.start},
+                                                len = Gc#gc.end_ - Gc#gc.start
+                                            }}
+                                    end
+                                end,
+                                BlockCells
+                            )
+                    end
+            end
+        end,
+        Diff
+    ).
+
+%% @doc diff_state_vector
+%%  遅れているclockをもつclientを集めてその遅れている方のclockを返す
+-spec diff_state_vector(state_vector:state_vector(), state_vector:state_vector()) ->
+    state_vector:state_vector().
+diff_state_vector(Local, Remote) ->
+    maps:fold(
+        fun(ClientId, Clock, Acc) ->
+            case state_vector:get(Remote, ClientId) of
+                RemoteClock when RemoteClock < Clock ->
+                    state_vector:set(Acc, ClientId, RemoteClock);
+                _ ->
+                    Acc
+            end
+        end,
+        state_vector:new(),
+        Local
+    ).
