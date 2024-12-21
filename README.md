@@ -8,12 +8,14 @@ This is a pure Erlang implementation of Yjs/Yrs, created as a learning project. 
 ### Backend
 Start the backend with the following command:
 
+```sh
 rebar3 shell
+```
 
 ### Frontend
 Set up and run the frontend demo:
 
-```
+```sh
 cd quill-demo
 npm install
 npm start
