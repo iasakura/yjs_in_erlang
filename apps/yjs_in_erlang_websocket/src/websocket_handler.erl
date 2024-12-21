@@ -33,10 +33,15 @@ init(Req, Manager) ->
     end.
 
 -spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary()}) ->
-    {ok, ws_local_state()}.
+    {cowboy_websocket:commands(), ws_local_state()}.
 websocket_init({Manager, Room}) ->
     Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
-    {ok, #ws_local_state{manager = Manager, doc = Doc, doc_id = Room}}.
+    {
+        [{binary, protocol:encode_sync_message({sync_step1, doc:get_state_vector(Doc)})}],
+        #ws_local_state{
+            manager = Manager, doc = Doc, doc_id = Room
+        }
+    }.
 
 -spec websocket_handle(
     ping | pong | {text | binary | ping | pong, binary()}, ws_local_state()
@@ -45,6 +50,7 @@ websocket_init({Manager, Room}) ->
 % 0 means syncMessage
 websocket_handle({binary, <<0:8, Msg/binary>>}, State) ->
     {YMsg, _} = protocol:decode_sync_message(Msg),
+    ?LOG_DEBUG("syncMessage: ~p", [YMsg]),
     Msgs = message_handler:handle_msg(YMsg, State),
     {Msgs, State};
 % 0 means awarenessMessage
@@ -59,7 +65,7 @@ websocket_handle(_, Doc) ->
 websocket_info({notify, update_v1, Update, _}, State) ->
     ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     % eqwalizer:ignore `Update`. Expression has type: term() Context expected type: protocol:sync_messages()
-    {[{binary, <<(protocol:encode_sync_message({update, Update}))/binary>>}], State};
+    {[{binary, protocol:encode_sync_message({update, Update})}], State};
 websocket_info(_, State) ->
     {[], State}.
 

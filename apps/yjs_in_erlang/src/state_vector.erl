@@ -35,9 +35,9 @@ encode_state_vector(SV) ->
     maps:fold(
         fun(ClientId, Clock, Acc) ->
             <<
+                Acc/binary,
                 (var_int:encode_uint(ClientId))/binary,
-                (var_int:encode_uint(Clock))/binary,
-                Acc/binary
+                (var_int:encode_uint(Clock))/binary
             >>
         end,
         <<(var_int:encode_uint(N))/binary>>,

@@ -5,7 +5,6 @@
 
 -include("../include/records.hrl").
 -include("../include/constants.hrl").
--include_lib("kernel/include/logger.hrl").
 
 -type block_range() :: #block_range{}.
 
