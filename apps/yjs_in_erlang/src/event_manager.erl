@@ -33,7 +33,13 @@ handle_call(Request, _From, State) ->
 
 handle_cast({notify, update_v1, Update, Txn}, State) ->
     lists:foreach(
-        fun(Pid) -> Pid ! {notify, update_v1, Update, Txn} end, State#state.update_v1_subscribers
+        fun(Pid) ->
+            case Pid =:= transaction:get_owner(Txn) of
+                true -> ok;
+                false -> Pid ! {notify, update_v1, Update, Txn}
+            end
+        end,
+        State#state.update_v1_subscribers
     ),
     {noreply, State};
 handle_cast({notify, node, Node, Txn}, State) ->
@@ -41,7 +47,10 @@ handle_cast({notify, node, Node, Txn}, State) ->
         fun(_, Subs) ->
             lists:foreach(
                 fun(Pid) ->
-                    Pid ! {notify, node, Node, Txn}
+                    case Pid =:= transaction:get_owner(Txn) of
+                        true -> ok;
+                        false -> Pid ! {notify, node, Node, Txn}
+                    end
                 end,
                 Subs
             )

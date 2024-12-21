@@ -12,8 +12,10 @@ handle_msg({sync_step1, StateVector}, #ws_local_state{doc = Doc}) ->
 handle_msg({sync_step2, Update}, #ws_local_state{doc = Doc}) ->
     Txn = transaction:new(Doc),
     transaction:apply_update(Txn, Update),
+    transaction:commit(Txn),
     [];
 handle_msg({update, Update}, #ws_local_state{doc = Doc}) ->
     Txn = transaction:new(Doc),
     transaction:apply_update(Txn, Update),
+    transaction:commit(Txn),
     [].

@@ -56,9 +56,10 @@ websocket_handle(_, Doc) ->
 
 -spec websocket_info(any(), websocket_connection_manager:ws_shared_doc()) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
-websocket_info({send, Update}, State) ->
+websocket_info({notify, update_v1, Update, _}, State) ->
+    ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     % eqwalizer:ignore `Update`. Expression has type: term() Context expected type: protocol:sync_messages()
-    {[{binary, <<(protocol:encode_sync_message(Update))/binary>>}], State};
+    {[{binary, <<(protocol:encode_sync_message({update, Update}))/binary>>}], State};
 websocket_info(_, State) ->
     {[], State}.
 

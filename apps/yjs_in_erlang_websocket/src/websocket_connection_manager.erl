@@ -5,7 +5,7 @@
 -export([
     start_link/0, get_or_create_doc/2, disconnect/2
 ]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2]).
 -export_type([ws_connection_manager/0, ws_global_state/0, ws_shared_doc/0, ws_local_state/0]).
 
 -include("../include/records.hrl").
@@ -25,7 +25,9 @@ start_link() ->
 
 -spec get_or_create_doc(ws_connection_manager(), binary()) -> doc:doc().
 get_or_create_doc(Manager, DocId) ->
-    gen_server:call(Manager, {get_or_create_doc, DocId}).
+    Doc = gen_server:call(Manager, {get_or_create_doc, DocId}),
+    doc:subscribe_update_v1(Doc),
+    Doc.
 
 -spec disconnect(ws_connection_manager(), binary()) -> ok.
 disconnect(Manager, DocId) ->
@@ -58,18 +60,6 @@ handle_cast({disconnect, DocId, From}, State) ->
                 }
         end,
     {noreply, NewState}.
-
--spec handle_info(term(), ws_global_state()) -> {noreply, ws_global_state()}.
-handle_info(_Info, State) ->
-    {noreply, State}.
-
--spec terminate(term(), ws_global_state()) -> ok.
-terminate(_Reason, _State) ->
-    ok.
-
--spec code_change(term(), ws_global_state(), term()) -> {ok, ws_global_state()}.
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
 
 %%% Internal functions
 -spec get_or_create_doc_impl(ws_global_state(), binary(), pid()) -> {doc:doc(), ws_global_state()}.
