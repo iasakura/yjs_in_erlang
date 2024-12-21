@@ -34,6 +34,7 @@ handle_call(Request, _From, State) ->
 handle_cast({notify, update_v1, Update, Txn}, State) ->
     lists:foreach(
         fun(Pid) ->
+            % only send to the processes other than the owner process
             case Pid =:= transaction:get_owner(Txn) of
                 true -> ok;
                 false -> Pid ! {notify, update_v1, Update, Txn}
@@ -47,6 +48,7 @@ handle_cast({notify, node, Node, Txn}, State) ->
         fun(_, Subs) ->
             lists:foreach(
                 fun(Pid) ->
+                    % only send to the processes other than the owner process
                     case Pid =:= transaction:get_owner(Txn) of
                         true -> ok;
                         false -> Pid ! {notify, node, Node, Txn}
