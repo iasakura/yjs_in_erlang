@@ -8,7 +8,8 @@
     splice/3,
     is_countable/1,
     content_len/1,
-    encode_info/1
+    encode_info/1,
+    get_id/1
 ]).
 -export_type([item/0]).
 
@@ -505,6 +506,8 @@ check_deleted(_Store, Parent, Item) ->
         (Item#item.parent_sub =/= undefined andalso
             option:is_some(get_item_from_link(Item#item.right))).
 
+%% @doc Splice an item into two items.
+%% If Offset is 0 or Offset is equal to Item#item.len - 1, return undefined (no-op).
 % TODO: OffsetKind
 -spec splice(store:store(), item(), integer()) -> option:option({item(), item()}).
 splice(Store, Item, Offset) ->
@@ -571,3 +574,6 @@ encode_info(Item) ->
     <<
         (HasOrigin bor HasRightOrigin bor HasParentSub bor RefNumber):8
     >>.
+
+-spec get_id(item:item()) -> id:id().
+get_id(Item) -> Item#item.id.

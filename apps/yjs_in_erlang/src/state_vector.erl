@@ -1,8 +1,6 @@
 -module(state_vector).
 
 -include("../include/records.hrl").
--include_lib("kernel/include/logger.hrl").
-
 -export_type([client_id/0, state_vector/0]).
 -export([
     new/0,
