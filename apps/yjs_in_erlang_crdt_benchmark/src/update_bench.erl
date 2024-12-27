@@ -1,7 +1,5 @@
 -module(update_bench).
 
--include_lib("kernel/include/logger.hrl").
-
 -export([bench/0, bench/2]).
 
 -spec decompress_gzip_data(binary()) -> binary().
