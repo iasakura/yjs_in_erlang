@@ -1,7 +1,17 @@
 -module(update).
 
--export([new/0, decode_update/1, encode_update/1, integrate/2, merge_update/1]).
--export_type([update/0, update_blocks/0, pending_update/0, delete_set/0, block_range/0]).
+-export([
+    new/0,
+    decode_update/1,
+    encode_block/1,
+    decode_block/2,
+    encode_update/1,
+    integrate/2,
+    merge_update/1
+]).
+-export_type([
+    update/0, update_blocks/0, pending_update/0, delete_set/0, block_range/0, block_carrier/0
+]).
 
 -include("../include/records.hrl").
 -include("../include/constants.hrl").

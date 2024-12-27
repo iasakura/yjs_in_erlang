@@ -5,14 +5,15 @@
     insert/3,
     encode_id_set/1,
     decode_id_set/1,
+    decode_id_range/1,
+    encode_id_range/1,
     merge_id_set/2,
     id_range_to_list/1,
     id_range_push/3
 ]).
 
--export_type([id_set/0]).
+-export_type([id_set/0, id_range/0]).
 
--include_lib("kernel/include/logger.hrl").
 -include("../include/id.hrl").
 -include("../include/range.hrl").
 
