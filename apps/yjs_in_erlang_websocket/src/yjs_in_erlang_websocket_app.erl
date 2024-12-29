@@ -9,6 +9,24 @@
 
 -export([start/2, stop/1]).
 
+start(_StartType, _StartArgs) ->
+    websocket_connection_manager_sup:start_link(yjs_in_erlang_bitcask_app),
+    Manager = whereis(websocket_connection_manager),
+    Dispatch = cowboy_router:compile([
+        {'_', [
+            {"/ws/[...]", websocket_handler, Manager}
+        ]}
+    ]),
+    {ok, _} = cowboy:start_clear(http, [{port, 3000}], #{
+        middlewares => [cors_middleware, cowboy_router, cowboy_handler],
+        env => #{dispatch => Dispatch}
+    }),
+    logger_init(),
+    yjs_in_erlang_websocket_sup:start_link().
+
+stop(_State) ->
+    ok = cowboy:stop_listener(http).
+
 logger_init() ->
     logger:set_primary_config(#{
         level => debug
@@ -44,23 +62,3 @@ logger_init() ->
                 }
         }}
     ).
-
-start(_StartType, _StartArgs) ->
-    websocket_connection_manager_sup:start_link(),
-    Manager = whereis(websocket_connection_manager),
-    Dispatch = cowboy_router:compile([
-        {'_', [
-            {"/ws/[...]", websocket_handler, Manager}
-        ]}
-    ]),
-    {ok, _} = cowboy:start_clear(http, [{port, 3000}], #{
-        middlewares => [cors_middleware, cowboy_router, cowboy_handler],
-        env => #{dispatch => Dispatch}
-    }),
-    logger_init(),
-    yjs_in_erlang_websocket_sup:start_link().
-
-stop(_State) ->
-    ok = cowboy:stop_listener(http).
-
-%% internal functions
