@@ -14,9 +14,7 @@
 -type ws_local_state() :: websocket_connection_manager:ws_local_state().
 
 -spec init(cowboy_req:req(), websocket_connection_manager:ws_connection_manager()) ->
-    {cowboy_websocket, cowboy_req:req(), {
-        websocket_connection_manager:ws_connection_manager(), binary()
-    }}
+    {cowboy_websocket, cowboy_req:req(), ws_local_state()}
     | {ok, cowboy_req:req(), binary()}.
 init(Req, Manager) ->
     {PeerAddress, PeerPort} = cowboy_req:peer(Req),
@@ -28,19 +26,25 @@ init(Req, Manager) ->
             {ok, Req1, <<>>};
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
-
-            {cowboy_websocket, Req, {Manager, Room}}
+            Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+            ?LOG_DEBUG("Doc: ~p", [Doc]),
+            doc:subscribe_update_v1(Doc),
+            {cowboy_websocket, Req, #ws_local_state{
+                manager = Manager, doc = Doc, doc_id = Room
+            }}
     end.
 
--spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary()}) ->
+-spec websocket_init(ws_local_state()) ->
     {cowboy_websocket:commands(), ws_local_state()}.
-websocket_init({Manager, Room}) ->
-    Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+websocket_init(State) ->
     {
-        [{binary, protocol:encode_sync_message({sync_step1, doc:get_state_vector(Doc)})}],
-        #ws_local_state{
-            manager = Manager, doc = Doc, doc_id = Room
-        }
+        [
+            {binary,
+                protocol:encode_sync_message(
+                    {sync_step1, doc:get_state_vector(State#ws_local_state.doc)}
+                )}
+        ],
+        State
     }.
 
 -spec websocket_handle(
@@ -64,8 +68,7 @@ websocket_handle(_, Doc) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
 websocket_info({notify, update_v1, Update, _}, State) ->
     ?LOG_DEBUG("notify update_v1: ~p", [Update]),
-    % eqwalizer:ignore `Update`. Expression has type: term() Context expected type: protocol:sync_messages()
-    {[{binary, protocol:encode_sync_message({update, Update})}], State};
+    {[{binary, protocol:encode_sync_message({update, eqwalizer:dynamic_cast(Update)})}], State};
 websocket_info(_, State) ->
     {[], State}.
 
