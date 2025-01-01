@@ -18,7 +18,6 @@
 -export_type([store/0]).
 
 -include("../include/records.hrl").
--include_lib("kernel/include/logger.hrl").
 
 -type store() :: #store{}.
 
@@ -35,7 +34,7 @@ new() ->
         parent = undefined,
         linked_by = #{},
         ets_manager = ets_manager:new(),
-        event_manager = event_manager:start()
+        event_manager = event_manager:start_link()
     }.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).

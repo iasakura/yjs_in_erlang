@@ -2,7 +2,6 @@
     {description, "An OTP library"},
     {vsn, "0.1.0"},
     {registered, []},
-    {mod, {yjs_in_erlang_bitcask_app, []}},
     {applications, [
         kernel,
         stdlib,

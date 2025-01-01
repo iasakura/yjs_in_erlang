@@ -1,4 +1,4 @@
--module(yjs_in_erlang_bitcask_app).
+-module(yjs_in_erlang_bitcask).
 
 -behavior(gen_server).
 
@@ -30,12 +30,24 @@ get_updates(Pid, StateVector) ->
 
 -spec init({doc:doc(), reference(), reference()}) -> {ok, state()}.
 init({Doc, BitcaskDir}) ->
-    BitcaskItemsRef = bitcask:open(binary_to_list(<<"./", BitcaskDir/binary, "/items">>), [
-        read_write
-    ]),
-    BitcaskDeletesRef = bitcask:open(binary_to_list(<<"./", BitcaskDir/binary, "/deletes">>), [
-        read_write
-    ]),
+    BitcaskItemsRef =
+        case
+            bitcask:open(binary_to_list(<<"./", BitcaskDir/binary, "/items">>), [
+                read_write
+            ])
+        of
+            {error, timeout} -> throw("timeout: open items db");
+            Ref -> Ref
+        end,
+    BitcaskDeletesRef =
+        case
+            bitcask:open(binary_to_list(<<"./", BitcaskDir/binary, "/deletes">>), [
+                read_write
+            ])
+        of
+            {error, timeout} -> throw("timeout: open deletes db");
+            Ref1 -> Ref1
+        end,
     Txn = transaction:new(Doc),
     State = #state{
         doc = Doc, bitcask_updates_ref = BitcaskItemsRef, bitcask_deletes_ref = BitcaskDeletesRef
