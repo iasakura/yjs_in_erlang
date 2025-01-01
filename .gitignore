@@ -24,3 +24,6 @@ rebar3.crashdump
 node_modules
 
 **/temp.erl
+
+**/*.data
+**/*.hint

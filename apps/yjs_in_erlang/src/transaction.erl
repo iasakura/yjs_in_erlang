@@ -13,7 +13,6 @@
 ]).
 -export_type([transaction_mut/0, subdocs/0]).
 
--include_lib("kernel/include/logger.hrl").
 -include("../include/constants.hrl").
 -include("../include/records.hrl").
 

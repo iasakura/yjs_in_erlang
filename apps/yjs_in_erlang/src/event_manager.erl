@@ -3,12 +3,11 @@
 -behavior(gen_server).
 
 -record(state, {
-    update_v1_subscribers :: list(pid()),
-    node_subscribers :: #{branch:branch() => list(pid())}
+    event_manager :: pid()
 }).
 
 %% Callbacks for `gen_server`
--export([init/1, handle_call/3, handle_cast/2, start/0]).
+-export([init/1, handle_call/3, handle_cast/2, start_link/0]).
 -export([subscribe/2, unsubscribe/2, has_subscribers/2, notify_update_v1/3]).
 -export_type([event_manager/0]).
 
@@ -17,57 +16,48 @@
 -type event_target() :: update_v1.
 
 -spec init(list()) -> {ok, #state{}}.
-init(_Args) ->
-    {ok, #state{update_v1_subscribers = [], node_subscribers = #{}}}.
+init([]) ->
+    {ok, EventManager} = gen_event:start_link(),
+    {ok, #state{event_manager = EventManager}}.
 
 handle_call({subscribe, update_v1}, {From, _}, State) ->
-    {reply, ok, State#state{update_v1_subscribers = [From | State#state.update_v1_subscribers]}};
-handle_call({unsubscribe, update_v1}, {From, _}, State) ->
-    {reply, ok, State#state{
-        update_v1_subscribers = lists:delete(From, State#state.update_v1_subscribers)
-    }};
-handle_call({has_subscribers, update_v1}, _From, State) ->
-    {reply, length(State#state.update_v1_subscribers) > 0, State};
+    Ref = make_ref(),
+    gen_event:add_handler(State#state.event_manager, {yjs_event_manager_handler, Ref}, [
+        From, true, []
+    ]),
+    {reply, {ok, Ref}, State};
+handle_call({unsubscribe, update_v1, Ref}, {_From, _}, State) ->
+    gen_event:delete_handler(State#state.event_manager, {yjs_event_manager_handler, Ref}, []),
+    {reply, ok, State};
+handle_call({has_subscribers, Source}, _From, State) ->
+    Handlers = gen_event:which_handlers(State#state.event_manager),
+    {reply,
+        lists:any(
+            fun(Handler) ->
+                case Handler of
+                    {yjs_event_manager_handler, Ref} ->
+                        yjs_event_manager_handler:is_subscribing(
+                            State#state.event_manager, eqwalizer:dynamic_cast(Ref), Source
+                        );
+                    _ ->
+                        false
+                end
+            end,
+            Handlers
+        ),
+        State};
 handle_call(Request, _From, State) ->
     {reply, {error, {unknown_request, Request}}, State}.
 
 handle_cast({notify, update_v1, Update, Txn}, State) ->
-    lists:foreach(
-        fun(Pid) ->
-            % only send to the processes other than the owner process
-            case Pid =:= transaction:get_owner(Txn) of
-                true -> ok;
-                false -> Pid ! {notify, update_v1, Update, Txn}
-            end
-        end,
-        State#state.update_v1_subscribers
-    ),
+    gen_event:notify(State#state.event_manager, {notify, update_v1, Update, Txn}),
     {noreply, State};
 handle_cast({notify, node, Node, Txn}, State) ->
-    maps:foreach(
-        fun(_, Subs) ->
-            lists:foreach(
-                fun(Pid) ->
-                    % only send to the processes other than the owner process
-                    case Pid =:= transaction:get_owner(Txn) of
-                        true -> ok;
-                        false -> Pid ! {notify, node, Node, Txn}
-                    end
-                end,
-                Subs
-            )
-        end,
-        maps:filter(
-            fun(N, _) ->
-                N =:= Node
-            end,
-            State#state.node_subscribers
-        )
-    ),
+    gen_event:notify(State#state.event_manager, {notify, node, Node, Txn}),
     {noreply, State}.
 
--spec start() -> event_manager().
-start() ->
+-spec start_link() -> event_manager().
+start_link() ->
     {ok, Pid} = gen_server:start_link(?MODULE, [], []),
     Pid.
 
