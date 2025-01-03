@@ -2,6 +2,7 @@
 
 -include("../include/records.hrl").
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 transaction_test() ->
     logging:init(),
@@ -20,6 +21,8 @@ transaction_test() ->
         {notify, update_v1, Update, YTxn} ->
             ?assertEqual(maps:size(Update#update.update_blocks), 1),
             #{0 := [{item, Block}]} = Update#update.update_blocks,
-            ?assertEqual(Block#item.content, {string, <<"test">>})
+            ?assertEqual(Block#item.content, {string, <<"test">>});
+        Msg ->
+            ?LOG_DEBUG("Unexpected message: ~p", [Msg])
     after 5000 -> throw("timeout")
     end.

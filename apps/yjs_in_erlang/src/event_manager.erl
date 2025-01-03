@@ -6,6 +6,8 @@
     event_manager :: pid()
 }).
 
+-include_lib("kernel/include/logger.hrl").
+
 %% Callbacks for `gen_server`
 -export([init/1, handle_call/3, handle_cast/2, start_link/0]).
 -export([subscribe/2, unsubscribe/2, has_subscribers/2, notify_update_v1/3]).
@@ -22,12 +24,12 @@ init([]) ->
 
 handle_call({subscribe, update_v1}, {From, _}, State) ->
     Ref = make_ref(),
-    gen_event:add_handler(State#state.event_manager, {yjs_event_manager_handler, Ref}, [
+    gen_event:add_handler(State#state.event_manager, {yjs_event_handler, Ref}, [
         From, true, []
     ]),
     {reply, {ok, Ref}, State};
 handle_call({unsubscribe, update_v1, Ref}, {_From, _}, State) ->
-    gen_event:delete_handler(State#state.event_manager, {yjs_event_manager_handler, Ref}, []),
+    gen_event:delete_handler(State#state.event_manager, {yjs_event_handler, Ref}, []),
     {reply, ok, State};
 handle_call({has_subscribers, Source}, _From, State) ->
     Handlers = gen_event:which_handlers(State#state.event_manager),
@@ -35,8 +37,8 @@ handle_call({has_subscribers, Source}, _From, State) ->
         lists:any(
             fun(Handler) ->
                 case Handler of
-                    {yjs_event_manager_handler, Ref} ->
-                        yjs_event_manager_handler:is_subscribing(
+                    {yjs_event_handler, Ref} ->
+                        yjs_event_handler:is_subscribing(
                             State#state.event_manager, eqwalizer:dynamic_cast(Ref), Source
                         );
                     _ ->

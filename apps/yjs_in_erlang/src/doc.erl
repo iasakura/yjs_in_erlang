@@ -2,6 +2,7 @@
 
 -export([
     new/0,
+    new_monitor/0,
     get_or_create_text/2,
     transact_mut/1,
     get_update/2,
@@ -17,7 +18,13 @@
 -spec new() -> doc().
 new() ->
     #doc{
-        store = store:new()
+        store = store:new_link()
+    }.
+
+-spec new_monitor() -> doc().
+new_monitor() ->
+    #doc{
+        store = store:new_monitor()
     }.
 
 -spec get_or_create_text(doc(), binary()) -> text:y_text().

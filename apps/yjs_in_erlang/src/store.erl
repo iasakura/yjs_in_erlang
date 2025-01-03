@@ -1,7 +1,8 @@
 -module(store).
 
 -export([
-    new/0,
+    new_link/0,
+    new_monitor/0,
     get_item/2,
     put_item/2,
     get_branch/2,
@@ -21,9 +22,11 @@
 
 -type store() :: #store{}.
 
--spec new() -> store().
-new() ->
+-spec new_link() -> store().
+new_link() ->
     EtsManager = ets_manager:new(),
+    EventManager = event_manager:start_link(),
+    {ok, Monitor} = doc_monitor:start_link(EtsManager, EventManager),
     #store{
         types = types:new(EtsManager),
         node_registry = node_registry:new(EtsManager),
@@ -33,8 +36,28 @@ new() ->
         subdocs = #{},
         parent = undefined,
         linked_by = #{},
-        ets_manager = ets_manager:new(),
-        event_manager = event_manager:start_link()
+        ets_manager = EtsManager,
+        event_manager = EventManager,
+        doc_monitor = Monitor
+    }.
+
+-spec new_monitor() -> store().
+new_monitor() ->
+    EtsManager = ets_manager:new(),
+    EventManager = event_manager:start_link(),
+    {ok, Monitor, _} = doc_monitor:start_monitor(EtsManager, EventManager),
+    #store{
+        types = types:new(EtsManager),
+        node_registry = node_registry:new(EtsManager),
+        blocks = block_store:new(EtsManager),
+        pending = undefined,
+        pending_ds = undefined,
+        subdocs = #{},
+        parent = undefined,
+        linked_by = #{},
+        ets_manager = EtsManager,
+        event_manager = EventManager,
+        doc_monitor = Monitor
     }.
 
 -spec get_item(store(), id:id()) -> option:option(item:item()).

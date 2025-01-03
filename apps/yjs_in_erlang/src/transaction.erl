@@ -1,5 +1,7 @@
 -module(transaction).
 
+-behavior(gen_server).
+
 -export([
     new/1,
     add_changed_type/3,
@@ -11,10 +13,13 @@
     commit/1,
     get_owner/1
 ]).
+%% Callbacks for `gen_server`
+-export([init/1, handle_call/3, handle_cast/2]).
 -export_type([transaction_mut/0, subdocs/0]).
 
 -include("../include/constants.hrl").
 -include("../include/records.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -type subdocs() :: #subdocs{}.
 
@@ -22,9 +27,37 @@
 
 -type transaction_mut_state() :: #transaction_mut{}.
 
+init([Doc]) ->
+    {ok, new_state(Doc)}.
+
+handle_call({apply_delete, DeleteSet}, _From, State) ->
+    DeleteSet0 = internal_apply_delete(State, DeleteSet),
+    {reply, DeleteSet0, State};
+handle_call({add_changed_type, Parent, ParentSub}, _From, State) ->
+    NewState = internal_add_changed_type(State, Parent, ParentSub),
+    {reply, ok, NewState};
+handle_call(get_store, _From, State) ->
+    {reply, State#transaction_mut.store, State};
+handle_call({set_store, NewStore}, _From, State) ->
+    {reply, ok, State#transaction_mut{store = NewStore}};
+handle_call(get_delete_set, _From, State) ->
+    {reply, State#transaction_mut.delete_set, State};
+handle_call({delete_item, Item}, _From, State) ->
+    {Res, NewState} = internal_delete_item(State, Item),
+    {reply, Res, NewState};
+handle_call(commit, _From, State) ->
+    internal_commit(State, self()),
+    {reply, ok, State#transaction_mut{committed = true}};
+handle_call(get_owner, _From, State) ->
+    {reply, State#transaction_mut.owner, State}.
+
+handle_cast(_Request, State) ->
+    {noreply, State}.
+
 -spec new(doc:doc()) -> transaction_mut().
 new(Doc) ->
-    spawn(fun() -> transaction_loop(new_state(Doc)) end).
+    {ok, Pid} = gen_server:start_link(?MODULE, [Doc], []),
+    Pid.
 
 -spec new_state(doc:doc()) -> transaction_mut_state().
 new_state(Doc) ->
@@ -43,87 +76,37 @@ new_state(Doc) ->
         owner = self()
     }.
 
--spec transaction_loop(transaction_mut_state()) -> no_return().
-transaction_loop(State) ->
-    receive
-        {Pid, apply_delete, Txn, DeleteSet} ->
-            DeleteSet0 = internal_apply_delete(State, DeleteSet),
-
-            Pid ! {Txn, DeleteSet0},
-            transaction_loop(State);
-        {Pid, add_changed_type, Txn, Parent, ParentSub} ->
-            NewState = internal_add_changed_type(State, Parent, ParentSub),
-            Pid ! {Txn, ok},
-            transaction_loop(NewState);
-        {Pid, get_store} ->
-            Pid ! {self(), State#transaction_mut.store},
-            transaction_loop(State);
-        {Pid, get_delete_set} ->
-            Pid ! {self(), State#transaction_mut.delete_set},
-            transaction_loop(State);
-        {Pid, set_store, NewStore} ->
-            Pid ! {self(), ok},
-            transaction_loop(State#transaction_mut{store = NewStore});
-        {Pid, delete_item, Item} ->
-            {Res, NewState} = internal_delete_item(State, Item),
-            Pid ! {self(), Res},
-            transaction_loop(NewState);
-        {Pid, commit} ->
-            internal_commit(State, self()),
-            Pid ! {self(), ok},
-            transaction_loop(State#transaction_mut{committed = true});
-        {Pid, get_owner} ->
-            Pid ! {self(), State#transaction_mut.owner},
-            transaction_loop(State)
-    end.
-
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
 apply_delete(Txn, DeleteSet) ->
-    Txn ! {self(), apply_delete, Txn, DeleteSet},
-    receive
-        {Txn, DeleteSet0} -> DeleteSet0
-    end.
+    gen_server:call(Txn, {apply_delete, DeleteSet}).
 
 -spec add_changed_type(transaction_mut(), branch:branch(), option:option(binary())) -> ok.
 add_changed_type(Txn, Parent, ParentSub) ->
-    Txn ! {self(), add_changed_type, Txn, Parent, ParentSub},
-    receive
-        {Txn, ok} -> ok
-    end.
+    gen_server:call(Txn, {add_changed_type, Parent, ParentSub}).
 
 -spec get_store(transaction_mut()) -> store:store().
 get_store(Txn) ->
-    Txn ! {self(), get_store},
-    receive
-        {Txn, Store} -> Store
-    end.
+    gen_server:call(Txn, get_store).
+
 -spec set_store(transaction_mut(), store:store()) -> ok.
 set_store(Txn, Store) ->
-    Txn ! {self(), set_store, Store},
-    receive
-        {Txn, ok} -> ok
-    end.
+    gen_server:call(Txn, {set_store, Store}).
 
 -spec get_delete_set(transaction_mut()) -> update:delete_set().
 get_delete_set(Txn) ->
-    Txn ! {self(), get_delete_set},
-    receive
-        {Txn, DeleteSet} -> DeleteSet
-    end.
+    gen_server:call(Txn, get_delete_set).
 
 -spec delete_item(transaction_mut(), item:item()) -> ok.
 delete_item(Txn, Item) ->
-    Txn ! {self(), delete_item, Item},
-    receive
-        {Txn, Res} -> Res
-    end.
+    gen_server:call(Txn, {delete_item, Item}).
 
 -spec commit(transaction_mut()) -> ok.
 commit(Txn) ->
-    Txn ! {self(), commit},
-    receive
-        {Txn, ok} -> ok
-    end.
+    gen_server:call(Txn, commit).
+
+-spec get_owner(transaction_mut()) -> pid().
+get_owner(Txn) ->
+    gen_server:call(Txn, get_owner).
 
 -spec apply_update(transaction_mut(), update:update()) -> ok.
 apply_update(Txn, Update) ->
@@ -440,6 +423,7 @@ trigger_update_v1(State, Txn) ->
         false ->
             ok;
         true ->
+            ?LOG_DEBUG("Triggering update_v1 event"),
             Update = create_update(State),
             event_manager:notify_update_v1(Manager, Update, Txn)
     end.
@@ -453,10 +437,3 @@ create_update(Txn) ->
         update_blocks = Blocks,
         delete_set = DeleteSet
     }.
-
--spec get_owner(transaction_mut()) -> pid().
-get_owner(Txn) ->
-    Txn ! {self(), get_owner},
-    receive
-        {Txn, Owner} -> Owner
-    end.

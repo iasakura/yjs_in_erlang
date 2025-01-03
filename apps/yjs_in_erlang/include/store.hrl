@@ -46,5 +46,6 @@
     parent :: option:option(id:id()),
     linked_by :: #{id:id() => sets:set(branch:branch())},
     ets_manager :: ets_manager:ets_manager(),
-    event_manager :: event_manager:event_manager()
+    event_manager :: event_manager:event_manager(),
+    doc_monitor :: doc_monitor:doc_monitor()
 }).

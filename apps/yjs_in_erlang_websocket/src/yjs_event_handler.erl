@@ -1,4 +1,4 @@
--module(yjs_event_manager_handler).
+-module(yjs_event_handler).
 
 -behaviour(gen_event).
 
