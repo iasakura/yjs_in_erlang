@@ -28,7 +28,7 @@ start_link(Doc, BitcaskDir) ->
 get_updates(Pid, StateVector) ->
     gen_server:call(Pid, {get_updates, StateVector}).
 
--spec init({doc:doc(), reference(), reference()}) -> {ok, state()}.
+-spec init({doc:doc(), binary()}) -> {ok, state()}.
 init({Doc, BitcaskDir}) ->
     BitcaskItemsRef =
         case
@@ -55,7 +55,10 @@ init({Doc, BitcaskDir}) ->
     Update = get_updates_impl(State, state_vector:new()),
     ?LOG_DEBUG("Initial update: ~p", [Update]),
     transaction:apply_update(Txn, Update),
+    transaction:commit(Txn),
     doc:subscribe_update_v1(Doc),
+    Monitor = doc:get_monitor(Doc),
+    monitor(process, Monitor),
     {ok, State}.
 
 handle_call({get_updates, StateVector}, _From, State) ->
@@ -115,6 +118,13 @@ handle_info({notify, update_v1, Update, _}, State) ->
         end,
         #{}
     ),
+    {noreply, State};
+handle_info({'DOWN', _Ref, process, _Pid, _Reason}, State) ->
+    % We don't restart the process by transient spec in supervisor.
+    % This is because the doc is already dead so we need to reopen the Doc & Bitcask.
+    exit(normal),
+    {noreply, State};
+handle_info(_Info, State) ->
     {noreply, State}.
 
 %% @doc 型付けのためのダミー関数。モジュール化してもいいかも
