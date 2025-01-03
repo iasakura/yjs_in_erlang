@@ -7,7 +7,8 @@
     transact_mut/1,
     get_update/2,
     subscribe_update_v1/1,
-    get_state_vector/1
+    get_state_vector/1,
+    get_monitor/1
 ]).
 -export_type([doc/0]).
 
@@ -75,10 +76,14 @@ get_update(Doc, StateVector) ->
         delete_set = DeleteSet
     }.
 
--spec subscribe_update_v1(doc()) -> ok.
+-spec subscribe_update_v1(doc()) -> {ok, reference()}.
 subscribe_update_v1(Doc) ->
     store:subscribe_update_v1(Doc#doc.store).
 
 -spec get_state_vector(doc()) -> state_vector:state_vector().
 get_state_vector(Doc) ->
     store:get_state_vector(Doc#doc.store).
+
+-spec get_monitor(doc()) -> doc_monitor:doc_monitor().
+get_monitor(Doc) ->
+    Doc#doc.store#store.doc_monitor.

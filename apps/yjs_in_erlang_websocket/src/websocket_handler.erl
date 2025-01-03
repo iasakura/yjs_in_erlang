@@ -27,6 +27,7 @@ init(Req, Manager) ->
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
             Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+            monitor(process, doc:get_monitor(Doc)),
             ?LOG_DEBUG("Doc: ~p", [Doc]),
             doc:subscribe_update_v1(Doc),
             {cowboy_websocket, Req, #ws_local_state{
@@ -69,6 +70,9 @@ websocket_handle(_, Doc) ->
 websocket_info({notify, update_v1, Update, _}, State) ->
     ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     {[{binary, protocol:encode_sync_message({update, eqwalizer:dynamic_cast(Update)})}], State};
+websocket_info({'DOWN', _Ref, process, _Pid, Reason}, State) ->
+    exit(self(), {"Exit due to Doc error: ", Reason}),
+    {[], State};
 websocket_info(_, State) ->
     {[], State}.
 

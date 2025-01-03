@@ -218,6 +218,6 @@ get_or_create_type(Store, Name, TypeRef) ->
             Branch1
     end.
 
--spec subscribe_update_v1(store()) -> ok.
+-spec subscribe_update_v1(store()) -> {ok, reference()}.
 subscribe_update_v1(Store) ->
     event_manager:subscribe(Store#store.event_manager, update_v1).
