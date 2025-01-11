@@ -25,12 +25,12 @@ npm start
 
 Once everything is running, you can view the demo at [http://localhost:8080/quill](http://localhost:8080/quill).
 
+## Supervisor tree
+
+![](./doc/supervisor.drawio.svg)
+
 ---
 
 ## Credits
 
 The `quill-demo` directory contains files sourced from [yjs-demos/quill](https://github.com/yjs/yjs-demos/tree/main/quill).
-
-## Supervisor
-
-![](./doc/supervisor.drawio.svg)
