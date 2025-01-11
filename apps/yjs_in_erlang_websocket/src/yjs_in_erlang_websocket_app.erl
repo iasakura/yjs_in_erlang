@@ -10,7 +10,7 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
-    websocket_connection_manager_sup:start_link(yjs_in_erlang_bitcask_sup),
+    websocket_connection_manager_sup:start_link(yjs_in_erlang_bitcask),
     Manager = whereis(websocket_connection_manager),
     Dispatch = cowboy_router:compile([
         {'_', [

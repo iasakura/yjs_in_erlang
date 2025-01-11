@@ -3,17 +3,19 @@
 -behaviour(gen_server).
 
 -export([
-    start_link/1, get_or_create_doc/2, disconnect/2
+    start_link/1, get_doc/2, get_or_create_doc/2, disconnect/2
 ]).
--export([init/1, handle_call/3, handle_cast/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export_type([ws_connection_manager/0, ws_global_state/0, ws_shared_doc/0, ws_local_state/0]).
 
 -include_lib("kernel/include/logger.hrl").
 -include("../include/records.hrl").
 
--opaque ws_connection_manager() :: pid().
+-type ws_connection_manager() :: pid().
 
 -type ws_global_state() :: #ws_global_state{}.
+
+-type client_info() :: #client_info{}.
 
 -type ws_shared_doc() :: #ws_shared_doc{}.
 
@@ -24,9 +26,13 @@
 start_link(StorageModule) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [StorageModule], []).
 
--spec get_or_create_doc(ws_connection_manager(), binary()) -> doc:doc().
+-spec get_or_create_doc(ws_connection_manager(), binary()) -> doc_server:doc().
 get_or_create_doc(Manager, DocId) ->
     gen_server:call(Manager, {get_or_create_doc, DocId}).
+
+-spec get_doc(ws_connection_manager(), binary()) -> option:option(doc_server:doc()).
+get_doc(Manager, DocId) ->
+    gen_server:call(Manager, {get_doc, DocId}).
 
 -spec disconnect(ws_connection_manager(), binary()) -> ok.
 disconnect(Manager, DocId) ->
@@ -36,13 +42,26 @@ disconnect(Manager, DocId) ->
 %%% gen_server callbacks
 -spec init([module()]) -> {ok, ws_global_state()}.
 init([StorageModule]) ->
-    {ok, #ws_global_state{docs = #{}, storage_module = StorageModule}}.
+    {ok, #ws_global_state{
+        docs = #{},
+        storage_module = StorageModule
+    }}.
 
 -spec handle_call(tuple(), {pid(), term()}, ws_global_state()) ->
     {reply, term(), ws_global_state()}.
 handle_call({get_or_create_doc, DocId}, {From, _}, State) ->
     {Doc, NewState} = get_or_create_doc_impl(State, DocId, From),
-    {reply, Doc, NewState}.
+    {reply, Doc, NewState};
+handle_call({get_doc, DocId}, _From, State) ->
+    case maps:find(DocId, State#ws_global_state.docs) of
+        error ->
+            {reply, none, State};
+        {ok, Doc} ->
+            DocServer = doc_sup:get_child_doc(Doc#ws_shared_doc.doc_sup),
+            {reply, {ok, DocServer}, State}
+    end;
+handle_call(Request, _From, State) ->
+    {reply, {error, {unknown_request, Request}}, State}.
 
 -spec handle_cast(tuple(), ws_global_state()) -> {noreply, ws_global_state()}.
 handle_cast({disconnect, DocId, From}, State) ->
@@ -51,35 +70,89 @@ handle_cast({disconnect, DocId, From}, State) ->
             error ->
                 State;
             {ok, Doc} ->
-                NewDoc = Doc#ws_shared_doc{
-                    clients = lists:delete(From, Doc#ws_shared_doc.clients)
-                },
-                State#ws_global_state{
-                    docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
-                }
+                {DeletedClients, Rest} = lists:splitwith(
+                    fun(Client) -> Client#client_info.pid =:= From end, Doc#ws_shared_doc.clients
+                ),
+                lists:foreach(
+                    fun(Client) ->
+                        demonitor(Client#client_info.client_monitor_ref)
+                    end,
+                    DeletedClients
+                ),
+                case Rest of
+                    [] ->
+                        doc_sup:terminate(Doc#ws_shared_doc.doc_sup),
+                        NewDocs = maps:remove(DocId, State#ws_global_state.docs),
+                        State#ws_global_state{
+                            docs = NewDocs
+                        };
+                    Clients ->
+                        NewDoc = Doc#ws_shared_doc{clients = Clients},
+                        State#ws_global_state{
+                            docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
+                        }
+                end
         end,
     {noreply, NewState}.
 
+-spec handle_info(term(), ws_global_state()) -> {noreply, ws_global_state()}.
+handle_info({'DOWN', MonitorRef, process, Pid, _Reason}, State) ->
+    % TODO: the following code takes linear time for documents and clients, please make faster.
+    % Remove the terminated doc
+    TerminatedDocKeys = maps:filtermap(
+        fun(Key, SharedDoc) ->
+            case SharedDoc#ws_shared_doc.doc_sup =:= Pid of
+                true ->
+                    {true, Key};
+                false ->
+                    false
+            end
+        end,
+        State#ws_global_state.docs
+    ),
+    maps:foreach(
+        fun(Key, _) -> maps:remove(Key, State#ws_global_state.docs) end, TerminatedDocKeys
+    ),
+    % Remove the terminated clients
+    NewDoc = maps:map(
+        fun(_, SharedDoc) ->
+            NewClients = lists:filter(
+                fun(Client) -> Client#client_info.client_monitor_ref =/= MonitorRef end,
+                SharedDoc#ws_shared_doc.clients
+            ),
+            SharedDoc#ws_shared_doc{clients = NewClients}
+        end,
+        State#ws_global_state.docs
+    ),
+    {noreply, State#ws_global_state{docs = NewDoc}};
+handle_info(Info, State) ->
+    ?LOG_DEBUG("Unexpected message: ~p~n", [Info]),
+    {noreply, State}.
+
 %%% Internal functions
 -spec get_or_create_doc_impl(ws_global_state(), binary(), pid()) ->
-    {doc:doc(), ws_global_state()}.
+    {doc_server:doc(), ws_global_state()}.
 get_or_create_doc_impl(State, DocId, From) ->
     case maps:find(DocId, State#ws_global_state.docs) of
         {ok, Doc} ->
-            NewDoc = Doc#ws_shared_doc{clients = [From | Doc#ws_shared_doc.clients]},
+            ClientMonitorRef = monitor(process, From),
+            ClientInfo = #client_info{pid = From, client_monitor_ref = ClientMonitorRef},
+            NewDoc = Doc#ws_shared_doc{clients = [ClientInfo | Doc#ws_shared_doc.clients]},
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
             },
-            {NewDoc#ws_shared_doc.doc, NewState};
+            Doc = doc_sup:get_child_doc(NewDoc#ws_shared_doc.doc_sup),
+            {Doc, NewState};
         error ->
-            Doc = doc:new(),
-            StorageModule = State#ws_global_state.storage_module,
-            Storage = StorageModule:start_link(Doc, DocId),
-            ?LOG_DEBUG("Doc: ~p, Storage: ~p", [Doc, Storage]),
+            {ok, Sup} = doc_sup:start_link(DocId),
+            Doc = doc_sup:get_child_doc(Sup),
+            ClientMonitorRef = monitor(process, From),
+            ClientInfo = #client_info{pid = From, client_monitor_ref = ClientMonitorRef},
+            DocMonitorRef = monitor(process, Sup),
             SharedDoc = #ws_shared_doc{
-                doc = Doc,
-                storage = Storage,
-                clients = [From]
+                doc_sup = Sup,
+                clients = [ClientInfo],
+                doc_monitor_ref = DocMonitorRef
             },
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, SharedDoc, State#ws_global_state.docs)

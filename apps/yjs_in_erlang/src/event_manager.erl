@@ -9,7 +9,7 @@
 -include_lib("kernel/include/logger.hrl").
 
 %% Callbacks for `gen_server`
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, start_link/0]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, start_link/0, terminate/2]).
 -export([subscribe/2, unsubscribe/2, has_subscribers/2, notify_update_v1/3]).
 -export_type([event_manager/0]).
 
@@ -25,7 +25,7 @@ init([]) ->
 handle_call({subscribe, update_v1}, {From, _}, State) ->
     Ref = monitor(process, From),
     gen_event:add_handler(State#state.event_manager, {yjs_event_handler, Ref}, [
-        From, true, []
+        Ref, From, true, []
     ]),
     {reply, {ok, Ref}, State};
 handle_call({unsubscribe, update_v1, Ref}, {_From, _}, State) ->
@@ -59,12 +59,17 @@ handle_cast({notify, node, Node, Txn}, State) ->
     gen_event:notify(State#state.event_manager, {notify, node, Node, Txn}),
     {noreply, State}.
 
+% Monitor the subscriber process and remove the handler when it goes down
 handle_info({'DOWN', Ref, process, _Pid, _Reason}, State) ->
     gen_event:delete_handler(State#state.event_manager, {yjs_event_handler, Ref}, []),
     {noreply, State};
 handle_info(Info, State) ->
     ?LOG_DEBUG("Unknown info: ~p", [Info]),
     {noreply, State}.
+
+terminate(_Reason, State) ->
+    gen_event:notify(State#state.event_manager, {notify, exit}),
+    ok.
 
 -spec start_link() -> event_manager().
 start_link() ->

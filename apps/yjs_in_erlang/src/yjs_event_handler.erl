@@ -3,6 +3,7 @@
 -behaviour(gen_event).
 
 -record(state, {
+    handler_ref :: reference(),
     subscriber :: pid(),
     update_v1_subscriber :: boolean(),
     node_subscribers :: [branch:branch()]
@@ -18,8 +19,11 @@
 
 -type event_source() :: update_v1 | {node, branch:branch()}.
 
-init([ToPid, SubscribeUpdateV1, SubscribedNodes]) ->
+%% callbacks for `gen_event`
+
+init([Ref, ToPid, SubscribeUpdateV1, SubscribedNodes]) ->
     {ok, #state{
+        handler_ref = Ref,
         subscriber = ToPid,
         update_v1_subscriber = SubscribeUpdateV1,
         node_subscribers = SubscribedNodes
@@ -38,6 +42,9 @@ handle_event({notify, node, Node, Txn}, State) ->
         false -> ok
     end,
     {ok, State};
+handle_event(exit, State) ->
+    State#state.subscriber ! {exit, State#state.handler_ref},
+    {stop, normal, State};
 handle_event(_, State) ->
     {ok, State}.
 
@@ -48,6 +55,8 @@ handle_call({is_subscribing, Source}, State) ->
             {node, Node} -> lists:member(Node, State#state.node_subscribers)
         end,
     {ok, Reply, State}.
+
+%% API
 
 -spec is_subscribing(pid(), reference(), event_source()) -> boolean().
 is_subscribing(Manager, Ref, Source) ->

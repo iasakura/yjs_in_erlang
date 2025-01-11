@@ -27,11 +27,11 @@ init(Req, Manager) ->
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
             Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
-            monitor(process, doc:get_monitor(Doc)),
+            MonitorRef = monitor(process, doc_server:get_monitor(Doc)),
             ?LOG_DEBUG("Doc: ~p", [Doc]),
-            doc:subscribe_update_v1(Doc),
+            doc_server:subscribe_update_v1(Doc),
             {cowboy_websocket, Req, #ws_local_state{
-                manager = Manager, doc = Doc, doc_id = Room
+                manager = Manager, doc = Doc, doc_id = Room, monitor_ref = MonitorRef
             }}
     end.
 
@@ -42,7 +42,7 @@ websocket_init(State) ->
         [
             {binary,
                 protocol:encode_sync_message(
-                    {sync_step1, doc:get_state_vector(State#ws_local_state.doc)}
+                    {sync_step1, doc_server:get_state_vector(State#ws_local_state.doc)}
                 )}
         ],
         State
@@ -65,14 +65,19 @@ websocket_handle({binary, <<1:8, _>>}, Doc) ->
 websocket_handle(_, Doc) ->
     {[], Doc}.
 
--spec websocket_info(any(), websocket_connection_manager:ws_shared_doc()) ->
-    {cowboy_websocket:commands(), websocket_connection_manager:ws_shared_doc()}.
+-spec websocket_info(any(), websocket_connection_manager:ws_local_state()) ->
+    {cowboy_websocket:commands(), websocket_connection_manager:ws_local_state()}.
 websocket_info({notify, update_v1, Update, _}, State) ->
     ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     {[{binary, protocol:encode_sync_message({update, eqwalizer:dynamic_cast(Update)})}], State};
-websocket_info({'DOWN', _Ref, process, _Pid, Reason}, State) ->
-    exit(self(), {"Exit due to Doc error: ", Reason}),
-    {[], State};
+websocket_info({'DOWN', MonitorRef, process, Object, Info}, State) ->
+    case MonitorRef =:= State#ws_local_state.monitor_ref of
+        true ->
+            exit({Object, Info}),
+            {[], State};
+        false ->
+            {[], State}
+    end;
 websocket_info(_, State) ->
     {[], State}.
 
