@@ -5,31 +5,30 @@
 -include_lib("kernel/include/logger.hrl").
 -include_lib("yjs_in_erlang/include/records.hrl").
 
-%% Callbacks for `gen_server`
 -export([
-    get_updates/2, start_link/2, init/1, handle_call/3, handle_cast/2, handle_info/2
+    get_update/1, start_link/1, init/1, handle_call/3, handle_cast/2, handle_info/2
 ]).
 
 -record(state, {
     bitcask_updates_ref :: reference(),
     bitcask_deletes_ref :: reference(),
-    doc :: doc:doc()
+    subscribe_ref :: option:option(reference())
 }).
 
 -type state() :: #state{}.
 
--spec start_link(doc:doc(), binary()) -> gen_server:start_ret().
-start_link(Doc, BitcaskDir) ->
-    gen_server:start_link(
-        {local, ?MODULE}, ?MODULE, {Doc, BitcaskDir}, []
-    ).
+-spec start_link(binary()) -> supervisor:startlink_ret().
+start_link(BitcaskDir) ->
+    supervisor:start_link(?MODULE, [BitcaskDir]).
 
--spec get_updates(pid(), state_vector:state_vector()) -> update:update().
-get_updates(Pid, StateVector) ->
-    gen_server:call(Pid, {get_updates, StateVector}).
+-spec get_update(binary()) -> update:update().
+get_update(Prefix) ->
+    State = get_state(Prefix),
+    Update = get_updates(State, state_vector:new()),
+    Update.
 
--spec init({doc:doc(), binary()}) -> {ok, state()}.
-init({Doc, BitcaskDir}) ->
+-spec get_state(binary()) -> state().
+get_state(BitcaskDir) ->
     BitcaskItemsRef =
         case
             bitcask:open(binary_to_list(<<"./", BitcaskDir/binary, "/items">>), [
@@ -48,22 +47,30 @@ init({Doc, BitcaskDir}) ->
             {error, timeout} -> throw("timeout: open deletes db");
             Ref1 -> Ref1
         end,
+    #state{
+        bitcask_updates_ref = BitcaskItemsRef,
+        bitcask_deletes_ref = BitcaskDeletesRef,
+        subscribe_ref = undefined
+    }.
+
+-spec init(binary()) -> {ok, state()}.
+init(BitcaskDir) ->
+    {ok, get_state(BitcaskDir)}.
+
+handle_call(get_doc, _From, State) ->
+    Doc = doc:new(),
     Txn = transaction:new(Doc),
-    State = #state{
-        doc = Doc, bitcask_updates_ref = BitcaskItemsRef, bitcask_deletes_ref = BitcaskDeletesRef
-    },
-    Update = get_updates_impl(State, state_vector:new()),
-    ?LOG_DEBUG("Initial update: ~p", [Update]),
-    transaction:apply_update(Txn, Update),
+    Updates = get_updates(State, state_vector:new()),
+
+    ?LOG_DEBUG("Initial update: ~p", [Updates]),
+    transaction:apply_update(Txn, Updates),
     transaction:commit(Txn),
-    doc:subscribe_update_v1(Doc),
+    Ref = doc:subscribe_update_v1(Doc),
     Monitor = doc:get_monitor(Doc),
     monitor(process, Monitor),
-    {ok, State}.
 
-handle_call({get_updates, StateVector}, _From, State) ->
-    Updates = get_updates_impl(State, StateVector),
-    {reply, Updates, State}.
+    transaction:apply_update(Txn, Updates),
+    {reply, Doc, State#state{subscribe_ref = Ref}}.
 
 handle_cast(_Request, _State) ->
     erlang:error(not_implemented).
@@ -119,10 +126,8 @@ handle_info({notify, update_v1, Update, _}, State) ->
         #{}
     ),
     {noreply, State};
-handle_info({'DOWN', _Ref, process, _Pid, _Reason}, State) ->
-    % We don't restart the process by transient spec in supervisor.
-    % This is because the doc is already dead so we need to reopen the Doc & Bitcask.
-    exit(normal),
+handle_info({exit, Ref}, State) ->
+    exit({error, io_lib:format("Exit doc of ~p", [Ref])}),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -136,8 +141,9 @@ bitcask_fold(Ref, Fun, Acc) ->
     % eqwalizer:ignore
     bitcask:fold(Ref, Fun, Acc).
 
--spec get_updates_impl(state(), state_vector:state_vector()) -> update:update().
-get_updates_impl(State, _StateVector) ->
+%% internal
+-spec get_updates(state(), state_vector:state_vector()) -> update:update().
+get_updates(State, _StateVector) ->
     ?LOG_DEBUG("State: ~p", [State]),
     BlockCarriers = bitcask_fold(
         State#state.bitcask_updates_ref,
