@@ -281,7 +281,7 @@ integrate_loop(
         {ok, Block} ->
             case Block of
                 {skip, _} ->
-                    {NewBlock, NewStack, NewTarget, ClientBlockIds, NewUpdate} = next(
+                    {NewBlock, NewStack, NewTarget, NewClientBlockIds, NewUpdate} = next(
                         UnappliedBlockStack,
                         CurTarget,
                         ClientBlockIds,
@@ -292,7 +292,7 @@ integrate_loop(
                         NewUpdate,
                         NewBlock,
                         NewTarget,
-                        ClientBlockIds,
+                        NewClientBlockIds,
                         LocalSV,
                         MissingSV,
                         Remaining,
@@ -373,7 +373,7 @@ integrate_loop(
                                     case Offset =:= 0 orelse Offset < block_carrier_length(Block) of
                                         false ->
                                             % 適用済み
-                                            {NewBlock, NewStack, NewTarget, ClientBlockIds,
+                                            {NewBlock, NewStack, NewTarget, NewClientBlockIds,
                                                 NewUpdate} = next(
                                                 UnappliedBlockStack,
                                                 CurTarget,
@@ -385,7 +385,7 @@ integrate_loop(
                                                 NewUpdate,
                                                 NewBlock,
                                                 NewTarget,
-                                                ClientBlockIds,
+                                                NewClientBlockIds,
                                                 LocalSV,
                                                 MissingSV,
                                                 Remaining,

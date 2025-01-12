@@ -7,6 +7,7 @@
     transact_mut/1,
     get_update/2,
     subscribe_update_v1/1,
+    subscribe_update_v1/2,
     get_state_vector/1,
     get_monitor/1
 ]).
@@ -78,7 +79,11 @@ get_update(Doc, StateVector) ->
 
 -spec subscribe_update_v1(doc()) -> {ok, reference()}.
 subscribe_update_v1(Doc) ->
-    store:subscribe_update_v1(Doc#doc.store).
+    store:subscribe_update_v1(Doc#doc.store, self()).
+
+-spec subscribe_update_v1(doc(), pid()) -> {ok, reference()}.
+subscribe_update_v1(Doc, Pid) ->
+    store:subscribe_update_v1(Doc#doc.store, Pid).
 
 -spec get_state_vector(doc()) -> state_vector:state_vector().
 get_state_vector(Doc) ->

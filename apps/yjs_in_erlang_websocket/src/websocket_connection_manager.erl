@@ -98,21 +98,6 @@ handle_cast({disconnect, DocId, From}, State) ->
 -spec handle_info(term(), ws_global_state()) -> {noreply, ws_global_state()}.
 handle_info({'DOWN', MonitorRef, process, Pid, _Reason}, State) ->
     % TODO: the following code takes linear time for documents and clients, please make faster.
-    % Remove the terminated doc
-    TerminatedDocKeys = maps:filtermap(
-        fun(Key, SharedDoc) ->
-            case SharedDoc#ws_shared_doc.doc_sup =:= Pid of
-                true ->
-                    {true, Key};
-                false ->
-                    false
-            end
-        end,
-        State#ws_global_state.docs
-    ),
-    maps:foreach(
-        fun(Key, _) -> maps:remove(Key, State#ws_global_state.docs) end, TerminatedDocKeys
-    ),
     % Remove the terminated clients
     NewDoc = maps:map(
         fun(_, SharedDoc) ->
@@ -125,8 +110,26 @@ handle_info({'DOWN', MonitorRef, process, Pid, _Reason}, State) ->
         State#ws_global_state.docs
     ),
     {noreply, State#ws_global_state{docs = NewDoc}};
+handle_info({'EXIT', From, _Reason}, State) ->
+    TerminatedDocKeys = maps:filtermap(
+        fun(_, SharedDoc) ->
+            case SharedDoc#ws_shared_doc.doc_sup =:= From of
+                true ->
+                    {true, ok};
+                false ->
+                    false
+            end
+        end,
+        State#ws_global_state.docs
+    ),
+    NewState = maps:fold(
+        fun(Key, _, Acc) -> maps:remove(Key, Acc) end,
+        State#ws_global_state.docs,
+        TerminatedDocKeys
+    ),
+    {noreply, State#ws_global_state{docs = NewState}};
 handle_info(Info, State) ->
-    ?LOG_DEBUG("Unexpected message: ~p~n", [Info]),
+    ?LOG_WARNING("Unexpected message: ~p~n", [Info]),
     {noreply, State}.
 
 %%% Internal functions
@@ -135,24 +138,25 @@ handle_info(Info, State) ->
 get_or_create_doc_impl(State, DocId, From) ->
     case maps:find(DocId, State#ws_global_state.docs) of
         {ok, Doc} ->
+            ?LOG_INFO("Reusing an opened document: ~p~n", [DocId]),
             ClientMonitorRef = monitor(process, From),
             ClientInfo = #client_info{pid = From, client_monitor_ref = ClientMonitorRef},
             NewDoc = Doc#ws_shared_doc{clients = [ClientInfo | Doc#ws_shared_doc.clients]},
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, NewDoc, State#ws_global_state.docs)
             },
-            Doc = doc_sup:get_child_doc(NewDoc#ws_shared_doc.doc_sup),
-            {Doc, NewState};
+            DocServer = doc_sup:get_child_doc(NewDoc#ws_shared_doc.doc_sup),
+            {DocServer, NewState};
         error ->
+            ?LOG_INFO("Creating a new document: ~p~n", [DocId]),
             {ok, Sup} = doc_sup:start_link(DocId),
+            process_flag(trap_exit, true),
             Doc = doc_sup:get_child_doc(Sup),
             ClientMonitorRef = monitor(process, From),
             ClientInfo = #client_info{pid = From, client_monitor_ref = ClientMonitorRef},
-            DocMonitorRef = monitor(process, Sup),
             SharedDoc = #ws_shared_doc{
                 doc_sup = Sup,
-                clients = [ClientInfo],
-                doc_monitor_ref = DocMonitorRef
+                clients = [ClientInfo]
             },
             NewState = State#ws_global_state{
                 docs = maps:put(DocId, SharedDoc, State#ws_global_state.docs)

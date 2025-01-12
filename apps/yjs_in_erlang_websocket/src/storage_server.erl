@@ -6,20 +6,26 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([start_link/1]).
 
+-include_lib("kernel/include/logger.hrl").
+
 -record(state, {
     inner_storage :: pid()
 }).
 
-init([Key]) ->
-    Manager =
-        case whereis(websocket_connection_manager) of
-            ManagerPid when is_pid(ManagerPid) ->
-                ManagerPid
+init(Key) ->
+    MayBeDoc = global:whereis_name({doc_server, Key}),
+    Doc =
+        case MayBeDoc of
+            Pid when is_pid(Pid) ->
+                ?LOG_INFO("Found existing doc ~p", [Pid]),
+                Pid;
+            _ ->
+                exit({error, not_found})
         end,
-    {ok, Doc} = websocket_connection_manager:get_doc(Manager, Key),
-    {ok, Pid} = yjs_in_erlang_bitcask:start_link(Key),
+    ?LOG_INFO("Subscribing to updates for doc ~p", [Doc]),
+    {ok, Bitcask} = yjs_in_erlang_bitcask:start_link(Key),
     doc_server:subscribe_update_v1(Doc),
-    {ok, #state{inner_storage = Pid}}.
+    {ok, #state{inner_storage = Bitcask}}.
 
 handle_call(_Request, _From, _State) ->
     erlang:error(not_implemented).
@@ -29,8 +35,9 @@ handle_cast(_Request, _State) ->
 
 %% just forward all requests to inner storage
 handle_info(Request, State) ->
-    State#state.inner_storage ! Request.
+    State#state.inner_storage ! Request,
+    {noreply, State}.
 
 -spec start_link(binary()) -> gen_server:start_ret().
 start_link(Key) ->
-    gen_server:start_link(?MODULE, [Key], []).
+    gen_server:start_link(?MODULE, Key, []).

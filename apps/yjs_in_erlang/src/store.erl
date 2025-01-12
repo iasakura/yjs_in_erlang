@@ -13,7 +13,7 @@
     push_gc/2,
     repair/2,
     get_or_create_type/3,
-    subscribe_update_v1/1
+    subscribe_update_v1/2
 ]).
 
 -export_type([store/0]).
@@ -218,6 +218,6 @@ get_or_create_type(Store, Name, TypeRef) ->
             Branch1
     end.
 
--spec subscribe_update_v1(store()) -> {ok, reference()}.
-subscribe_update_v1(Store) ->
-    event_manager:subscribe(Store#store.event_manager, update_v1).
+-spec subscribe_update_v1(store(), pid()) -> {ok, reference()}.
+subscribe_update_v1(Store, Pid) ->
+    event_manager:subscribe(Store#store.event_manager, Pid, update_v1).
