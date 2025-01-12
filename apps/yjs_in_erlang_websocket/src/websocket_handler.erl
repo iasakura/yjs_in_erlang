@@ -14,7 +14,9 @@
 -type ws_local_state() :: websocket_connection_manager:ws_local_state().
 
 -spec init(cowboy_req:req(), websocket_connection_manager:ws_connection_manager()) ->
-    {cowboy_websocket, cowboy_req:req(), ws_local_state()}
+    {cowboy_websocket, cowboy_req:req(), {
+        websocket_connection_manager:ws_connection_manager(), binary()
+    }}
     | {ok, cowboy_req:req(), binary()}.
 init(Req, Manager) ->
     {PeerAddress, PeerPort} = cowboy_req:peer(Req),
@@ -26,18 +28,19 @@ init(Req, Manager) ->
             {ok, Req1, <<>>};
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
-            Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
-            MonitorRef = monitor(process, doc_server:get_monitor(Doc)),
-            ?LOG_DEBUG("Doc: ~p", [Doc]),
-            doc_server:subscribe_update_v1(Doc),
-            {cowboy_websocket, Req, #ws_local_state{
-                manager = Manager, doc = Doc, doc_id = Room, monitor_ref = MonitorRef
-            }}
+            ?LOG_INFO("Manager: ~p, Room: ~p", [Manager, Room]),
+            {cowboy_websocket, Req, {Manager, Room}}
     end.
 
--spec websocket_init(ws_local_state()) ->
+-spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary()}) ->
     {cowboy_websocket:commands(), ws_local_state()}.
-websocket_init(State) ->
+websocket_init({Manager, Room}) ->
+    Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+    MonitorRef = monitor(process, Doc),
+    doc_server:subscribe_update_v1(Doc),
+    State = #ws_local_state{
+        manager = Manager, doc = Doc, doc_id = Room, monitor_ref = MonitorRef
+    },
     {
         [
             {binary,
@@ -55,20 +58,18 @@ websocket_init(State) ->
 % 0 means syncMessage
 websocket_handle({binary, <<0:8, Msg/binary>>}, State) ->
     {YMsg, _} = protocol:decode_sync_message(Msg),
-    ?LOG_DEBUG("syncMessage: ~p", [YMsg]),
     Msgs = message_handler:handle_msg(YMsg, State),
     {Msgs, State};
 % 0 means awarenessMessage
-websocket_handle({binary, <<1:8, _>>}, Doc) ->
+websocket_handle({binary, <<1:8, _>>}, State) ->
     % TODO: implement
-    {[], Doc};
-websocket_handle(_, Doc) ->
-    {[], Doc}.
+    {[], State};
+websocket_handle(_, State) ->
+    {[], State}.
 
 -spec websocket_info(any(), websocket_connection_manager:ws_local_state()) ->
     {cowboy_websocket:commands(), websocket_connection_manager:ws_local_state()}.
 websocket_info({notify, update_v1, Update, _}, State) ->
-    ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     {[{binary, protocol:encode_sync_message({update, eqwalizer:dynamic_cast(Update)})}], State};
 websocket_info({'DOWN', MonitorRef, process, Object, Info}, State) ->
     case MonitorRef =:= State#ws_local_state.monitor_ref of
@@ -81,7 +82,11 @@ websocket_info({'DOWN', MonitorRef, process, Object, Info}, State) ->
 websocket_info(_, State) ->
     {[], State}.
 
-terminate(_, _, State) ->
-    websocket_connection_manager:disconnect(
-        State#ws_local_state.manager, State#ws_local_state.doc_id
-    ).
+terminate(Reason, PartialReq, State) ->
+    ?LOG_INFO("Terminating ~p ~p ~p", [Reason, PartialReq, State]),
+    case State of
+        #ws_local_state{manager = Manager, doc_id = DocId} ->
+            websocket_connection_manager:disconnect(Manager, DocId);
+        _ ->
+            ok
+    end.

@@ -2,9 +2,11 @@
 
 -behaviour(supervisor).
 
+-include_lib("kernel/include/logger.hrl").
+
 -export([init/1, start_link/1, get_child_doc/1, get_child_storage/1, terminate/1]).
 
-init([Key]) ->
+init(Key) ->
     {ok,
         {#{strategy => rest_for_one, intencity => 1, period => 5}, [
             #{
@@ -13,8 +15,8 @@ init([Key]) ->
                 restart => permanent
             },
             #{
-                id => doc_storage,
-                start => {doc_storage, start_link, [Key]},
+                id => storage_server,
+                start => {storage_server, start_link, [Key]},
                 restart => permanent
             }
         ]}}.
@@ -25,7 +27,7 @@ get_child_doc(Manager) ->
 
 -spec get_child_storage(pid()) -> pid().
 get_child_storage(Manager) ->
-    find_child_by_id(Manager, doc_storage).
+    find_child_by_id(Manager, storage_server).
 
 -spec find_child_by_id(pid(), atom()) -> pid().
 find_child_by_id(Supervisor, Id) ->
@@ -41,7 +43,7 @@ find_child_by_id(Supervisor, Id) ->
 
 -spec start_link(binary()) -> supervisor:startlink_ret().
 start_link(Key) ->
-    supervisor:start_link(?MODULE, [Key]).
+    supervisor:start_link(?MODULE, Key).
 
 -spec terminate(pid()) -> ok.
 terminate(Pid) ->

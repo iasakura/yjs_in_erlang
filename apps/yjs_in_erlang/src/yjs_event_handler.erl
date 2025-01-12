@@ -2,6 +2,8 @@
 
 -behaviour(gen_event).
 
+-include_lib("kernel/include/logger.hrl").
+
 -record(state, {
     handler_ref :: reference(),
     subscriber :: pid(),
@@ -22,6 +24,9 @@
 %% callbacks for `gen_event`
 
 init([Ref, ToPid, SubscribeUpdateV1, SubscribedNodes]) ->
+    ?LOG_DEBUG("Initializing event handler with ~p, ~p, ~p, ~p", [
+        Ref, ToPid, SubscribeUpdateV1, SubscribedNodes
+    ]),
     {ok, #state{
         handler_ref = Ref,
         subscriber = ToPid,
@@ -30,6 +35,7 @@ init([Ref, ToPid, SubscribeUpdateV1, SubscribedNodes]) ->
     }}.
 
 handle_event({notify, update_v1, Update, Txn}, State) ->
+    ?LOG_DEBUG("Notifying update_v1 to ~p", [State#state.subscriber]),
     case State#state.update_v1_subscriber of
         true -> State#state.subscriber ! {notify, update_v1, Update, Txn};
         false -> ok

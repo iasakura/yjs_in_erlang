@@ -4,8 +4,10 @@
 
 -type doc() :: pid().
 
+-include_lib("kernel/include/logger.hrl").
+
 %% Callbacks for `gen_server`
--export([init/1, handle_call/3, handle_cast/2, start_link/0]).
+-export([init/1, handle_call/3, handle_cast/2, start_link/1]).
 -export([
     get_or_create_text/2,
     transact_mut/1,
@@ -21,11 +23,12 @@
     doc :: doc:doc()
 }).
 
-init([Dir]) ->
+init(Dir) ->
     Update = yjs_in_erlang_bitcask:get_update(Dir),
     Doc = doc:new(),
     Txn = doc:transact_mut(Doc),
     transaction:apply_update(Txn, Update),
+    global:register_name({doc_server, Dir}, self()),
     {ok, #state{doc = Doc}}.
 
 handle_call({get_or_create_text, Name}, _From, State) ->
@@ -37,9 +40,9 @@ handle_call(transact_mut, _From, State) ->
 handle_call({get_update, SV}, _From, State) ->
     Doc = State#state.doc,
     {reply, doc:get_update(Doc, SV), State};
-handle_call(subscribe_update_v1, _From, State) ->
+handle_call(subscribe_update_v1, {From, _}, State) ->
     Doc = State#state.doc,
-    doc:subscribe_update_v1(Doc),
+    doc:subscribe_update_v1(Doc, From),
     {reply, ok, State};
 handle_call(get_state_vector, _From, State) ->
     Doc = State#state.doc,
@@ -51,14 +54,15 @@ handle_call(new_transaction, _From, State) ->
     Doc = State#state.doc,
     {reply, transaction:new(Doc), State};
 handle_call(Request, _From, State) ->
+    ?LOG_WARNING("Unknown request: ~p", [Request]),
     {reply, {error, {unknown_request, Request}}, State}.
 
 handle_cast(_Request, State) ->
     {noreply, State}.
 
--spec start_link() -> gen_server:start_ret().
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+-spec start_link(term()) -> gen_server:start_ret().
+start_link(Key) ->
+    gen_server:start_link(?MODULE, Key, []).
 
 -spec get_or_create_text(pid(), binary()) -> text:y_text().
 get_or_create_text(Server, Name) ->

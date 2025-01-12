@@ -423,7 +423,6 @@ trigger_update_v1(State, Txn) ->
         false ->
             ok;
         true ->
-            ?LOG_DEBUG("Triggering update_v1 event"),
             Update = create_update(State),
             event_manager:notify_update_v1(Manager, Update, Txn)
     end.

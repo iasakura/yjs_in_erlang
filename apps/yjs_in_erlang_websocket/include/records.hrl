@@ -5,8 +5,7 @@
 
 -record(ws_shared_doc, {
     doc_sup :: pid(),
-    clients :: [websocket_connection_manager:client_info()],
-    doc_monitor_ref :: reference()
+    clients :: [websocket_connection_manager:client_info()]
 }).
 
 -record(client_info, {

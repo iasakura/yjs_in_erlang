@@ -17,9 +17,9 @@
 
 -type state() :: #state{}.
 
--spec start_link(binary()) -> supervisor:startlink_ret().
+-spec start_link(binary()) -> gen_server:start_ret().
 start_link(BitcaskDir) ->
-    supervisor:start_link(?MODULE, [BitcaskDir]).
+    gen_server:start_link(?MODULE, BitcaskDir, []).
 
 -spec get_update(binary()) -> update:update().
 get_update(Prefix) ->
@@ -62,7 +62,6 @@ handle_call(get_doc, _From, State) ->
     Txn = transaction:new(Doc),
     Updates = get_updates(State, state_vector:new()),
 
-    ?LOG_DEBUG("Initial update: ~p", [Updates]),
     transaction:apply_update(Txn, Updates),
     transaction:commit(Txn),
     Ref = doc:subscribe_update_v1(Doc),
@@ -76,7 +75,6 @@ handle_cast(_Request, _State) ->
     erlang:error(not_implemented).
 
 handle_info({notify, update_v1, Update, _}, State) ->
-    ?LOG_DEBUG("notify update_v1: ~p", [Update]),
     maps:foreach(
         fun(_, Blocks) ->
             lists:foreach(
@@ -144,11 +142,9 @@ bitcask_fold(Ref, Fun, Acc) ->
 %% internal
 -spec get_updates(state(), state_vector:state_vector()) -> update:update().
 get_updates(State, _StateVector) ->
-    ?LOG_DEBUG("State: ~p", [State]),
     BlockCarriers = bitcask_fold(
         State#state.bitcask_updates_ref,
         fun(Key, Value, Acc) ->
-            ?LOG_DEBUG("Key: ~p, Value: ~p", [Key, Value]),
             {Id, <<>>} = id:decode_id(Key),
             {BlockCarrier, <<>>} = update:decode_block(Id, Value),
             case Id of
@@ -162,7 +158,6 @@ get_updates(State, _StateVector) ->
         end,
         #{}
     ),
-    ?LOG_DEBUG("BlockCarriers: ~p", [BlockCarriers]),
     BlockCarriers0 =
         case BlockCarriers of
             {error, BCTerm} -> throw(BCTerm);

@@ -27,3 +27,4 @@ node_modules
 
 **/*.data
 **/*.hint
+**/*.write.lock

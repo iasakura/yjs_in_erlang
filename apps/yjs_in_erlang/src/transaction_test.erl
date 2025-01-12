@@ -23,6 +23,6 @@ transaction_test() ->
             #{0 := [{item, Block}]} = Update#update.update_blocks,
             ?assertEqual(Block#item.content, {string, <<"test">>});
         Msg ->
-            ?LOG_DEBUG("Unexpected message: ~p", [Msg])
+            ?LOG_WARNING("Unexpected message: ~p", [Msg])
     after 5000 -> throw("timeout")
     end.
