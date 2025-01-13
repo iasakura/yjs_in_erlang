@@ -4,7 +4,7 @@
 
 %% Callbacks for `gen_server`
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
--export([start_link/1]).
+-export([start_link/2]).
 
 -include_lib("kernel/include/logger.hrl").
 
@@ -12,7 +12,7 @@
     inner_storage :: pid()
 }).
 
-init(Key) ->
+init({Key, StorageModule}) ->
     MayBeDoc = global:whereis_name({doc_server, Key}),
     Doc =
         case MayBeDoc of
@@ -23,7 +23,7 @@ init(Key) ->
                 exit({error, not_found})
         end,
     ?LOG_INFO("Subscribing to updates for doc ~p", [Doc]),
-    {ok, Bitcask} = yjs_in_erlang_bitcask:start_link(Key),
+    {ok, Bitcask} = StorageModule:start_link(Key),
     doc_server:subscribe_update_v1(Doc),
     {ok, #state{inner_storage = Bitcask}}.
 
@@ -38,6 +38,6 @@ handle_info(Request, State) ->
     State#state.inner_storage ! Request,
     {noreply, State}.
 
--spec start_link(binary()) -> gen_server:start_ret().
-start_link(Key) ->
-    gen_server:start_link(?MODULE, Key, []).
+-spec start_link(binary(), module()) -> gen_server:start_ret().
+start_link(Key, StorageModule) ->
+    gen_server:start_link(?MODULE, {Key, StorageModule}, []).
