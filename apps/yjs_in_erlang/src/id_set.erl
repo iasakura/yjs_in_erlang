@@ -9,7 +9,8 @@
     encode_id_range/1,
     merge_id_set/2,
     id_range_to_list/1,
-    id_range_push/3
+    id_range_push/3,
+    subtract_id_set/2
 ]).
 
 -export_type([id_set/0, id_range/0]).
@@ -162,4 +163,60 @@ merge_id_set(D1, D2) ->
         end,
         D1,
         D2
+    ).
+
+-spec subtract_id_range(id_range(), id_range()) -> id_range().
+subtract_id_range({continuous, R1}, {continuous, R2}) ->
+    case range:subtract(R1, R2) of
+        [R] -> {continuous, R};
+        Rs -> {fragmented, Rs}
+    end;
+subtract_id_range({continuous, R1}, {fragmented, Ranges}) ->
+    case
+        lists:foldl(
+            fun(R, Acc) ->
+                lists:flatmap(fun(Range1) -> range:subtract(Range1, R) end, Acc)
+            end,
+            [R1],
+            Ranges
+        )
+    of
+        [R] -> {continuous, R};
+        Rs -> {fragmented, Rs}
+    end;
+subtract_id_range({fragmented, Ranges1}, {continuous, R2}) ->
+    case lists:flatmap(fun(R) -> range:subtract(R, R2) end, Ranges1) of
+        [R] -> {continuous, R};
+        Rs -> {fragmented, Rs}
+    end;
+subtract_id_range({fragmented, Ranges1}, {fragmented, Ranges2}) ->
+    case
+        lists:foldl(
+            fun(R, Acc) ->
+                lists:flatmap(fun(R1) -> range:subtract(R1, R) end, Acc)
+            end,
+            Ranges1,
+            Ranges2
+        )
+    of
+        [R] -> {continuous, R};
+        Rs -> {fragmented, Rs}
+    end.
+
+-spec subtract_id_set(id_set(), id_set()) -> id_set().
+subtract_id_set(D1, D2) ->
+    maps:filtermap(
+        fun(_K, V) ->
+            case V of
+                {fragmented, []} -> false;
+                _ -> true
+            end
+        end,
+        maps:merge_with(
+            fun(_K, V1, V2) ->
+                subtract_id_range(V1, V2)
+            end,
+            D1,
+            D2
+        )
     ).

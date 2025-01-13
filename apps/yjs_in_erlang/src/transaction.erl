@@ -31,8 +31,10 @@ init([Doc]) ->
     {ok, new_state(Doc)}.
 
 handle_call({apply_delete, DeleteSet}, _From, State) ->
-    DeleteSet0 = internal_apply_delete(State, DeleteSet),
-    {reply, DeleteSet0, State};
+    {Rest, Deleted} = internal_apply_delete(State, DeleteSet),
+    {reply, Rest, State#transaction_mut{
+        delete_set = id_set:merge_id_set(State#transaction_mut.delete_set, Deleted)
+    }};
 handle_call({add_changed_type, Parent, ParentSub}, _From, State) ->
     NewState = internal_add_changed_type(State, Parent, ParentSub),
     {reply, ok, NewState};
@@ -338,10 +340,11 @@ delete_by_range(Txn, Blocks, Clock, ClockEnd) ->
             end
     end.
 
--spec internal_apply_delete(transaction_mut_state(), update:delete_set()) -> update:delete_set().
+-spec internal_apply_delete(transaction_mut_state(), update:delete_set()) ->
+    {update:delete_set(), update:delete_set()}.
 internal_apply_delete(State, DeleteSet) ->
     Store = State#transaction_mut.store,
-    maps:filtermap(
+    Rest = maps:filtermap(
         fun(ClientId, Range) ->
             Ranges = id_set:id_range_to_list(Range),
             case block_store:get_client(Store#store.blocks, ClientId) of
@@ -363,7 +366,9 @@ internal_apply_delete(State, DeleteSet) ->
             end
         end,
         DeleteSet
-    ).
+    ),
+    Deleted = id_set:subtract_id_set(DeleteSet, Rest),
+    {Rest, Deleted}.
 
 -spec internal_add_changed_type(transaction_mut_state(), branch:branch(), option:option(binary())) ->
     transaction_mut_state().
