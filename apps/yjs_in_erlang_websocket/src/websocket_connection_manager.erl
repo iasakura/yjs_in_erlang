@@ -96,7 +96,7 @@ handle_cast({disconnect, DocId, From}, State) ->
     {noreply, NewState}.
 
 -spec handle_info(term(), ws_global_state()) -> {noreply, ws_global_state()}.
-handle_info({'DOWN', MonitorRef, process, Pid, _Reason}, State) ->
+handle_info({'DOWN', MonitorRef, process, _Pid, _Reason}, State) ->
     % TODO: the following code takes linear time for documents and clients, please make faster.
     % Remove the terminated clients
     NewDoc = maps:map(

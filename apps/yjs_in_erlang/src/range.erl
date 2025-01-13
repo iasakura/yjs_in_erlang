@@ -1,6 +1,6 @@
 -module(range).
 
--export([decode_range/1, encode_range/1, try_join/2]).
+-export([decode_range/1, encode_range/1, try_join/2, subtract/2]).
 -export_type([range/0]).
 
 -include("../include/range.hrl").
@@ -32,3 +32,30 @@ decode_range(Bin) ->
     {Start, Bin1} = var_int:decode_uint(Bin),
     {Len, Bin2} = var_int:decode_uint(Bin1),
     {{range, Start, Start + Len}, Bin2}.
+
+-spec subtract(range(), range()) -> [range()].
+subtract(R1, R2) ->
+    case disjoint(R1, R2) of
+        true ->
+            [R1];
+        false ->
+            case R1#range.start < R2#range.start of
+                true ->
+                    case R1#range.end_ > R2#range.end_ of
+                        true ->
+                            [
+                                #range{start = R1#range.start, end_ = R2#range.start - 1},
+                                #range{start = R2#range.end_ + 1, end_ = R1#range.end_}
+                            ];
+                        false ->
+                            [#range{start = R1#range.start, end_ = R2#range.start - 1}]
+                    end;
+                false ->
+                    case R1#range.end_ > R2#range.end_ of
+                        true ->
+                            [#range{start = R2#range.end_ + 1, end_ = R1#range.end_}];
+                        false ->
+                            []
+                    end
+            end
+    end.
