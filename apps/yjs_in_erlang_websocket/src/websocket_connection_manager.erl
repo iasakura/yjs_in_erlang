@@ -149,7 +149,7 @@ get_or_create_doc_impl(State, DocId, From) ->
             {DocServer, NewState};
         error ->
             ?LOG_INFO("Creating a new document: ~p~n", [DocId]),
-            {ok, Sup} = doc_sup:start_link(DocId),
+            {ok, Sup} = doc_sup:start_link(DocId, State#ws_global_state.storage_module),
             process_flag(trap_exit, true),
             Doc = doc_sup:get_child_doc(Sup),
             ClientMonitorRef = monitor(process, From),
