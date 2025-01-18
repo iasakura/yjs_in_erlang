@@ -699,8 +699,8 @@ merge_update(Updates) ->
                         Acc1
                     )
                 end,
-                U#update.update_blocks,
-                Acc
+                Acc,
+                U#update.update_blocks
             )
         end,
         #{},

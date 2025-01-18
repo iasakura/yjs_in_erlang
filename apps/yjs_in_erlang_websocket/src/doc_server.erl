@@ -5,6 +5,7 @@
 -type doc() :: pid().
 
 -include_lib("kernel/include/logger.hrl").
+-include_lib("yjs_in_erlang/include/records.hrl").
 
 %% Callbacks for `gen_server`
 -export([init/1, handle_call/3, handle_cast/2, start_link/2]).
@@ -28,9 +29,6 @@ init({Dir, StorageModule}) ->
     Doc = doc:new(),
     Txn = doc:transact_mut(Doc),
     transaction:apply_update(Txn, Update),
-    Text = doc:get_or_create_text(Doc, <<"quill">>),
-    ?LOG_DEBUG("text = ~ts", [text:get_string(Text)]),
-    ?LOG_DEBUG("Store = ~p", [transaction:get_store(Txn)]),
     global:register_name({doc_server, Dir}, self()),
     {ok, #state{doc = Doc}}.
 
