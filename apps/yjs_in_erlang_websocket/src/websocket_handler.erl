@@ -27,7 +27,7 @@ init(Req, Manager) ->
             Req1 = cowboy_req:reply(400, Req),
             {ok, Req1, <<>>};
         _ ->
-            Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "/", X/binary>> end, <<>>, Rest),
+            Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "_", X/binary>> end, <<>>, Rest),
             ?LOG_INFO("Manager: ~p, Room: ~p", [Manager, Room]),
             {cowboy_websocket, Req, {Manager, Room}}
     end.
