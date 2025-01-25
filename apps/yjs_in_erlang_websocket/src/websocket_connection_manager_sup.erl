@@ -11,10 +11,10 @@ start_link(StorageModule) ->
 
 init([StorageModule]) ->
     {ok,
-        {{rest_for_all, 5, 10}, [
+        {{rest_for_one, 5, 10}, [
             #{
                 id => term_key_registerer,
-                start => {term_key_registerer, init, []},
+                start => {term_key_registerer, start_link, []},
                 restart => permanent,
                 shutdown => 5000,
                 type => worker,

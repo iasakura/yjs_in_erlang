@@ -62,9 +62,9 @@ handle_cast({'DOWN', Ref, _, _, _}, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
--spec start_link() -> supervisor:startlink_ret().
+-spec start_link() -> gen_server:start_ret().
 start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec register(term(), pid()) -> ok.
 register(Key, Pid) ->
