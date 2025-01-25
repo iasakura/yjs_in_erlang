@@ -11,7 +11,15 @@ start_link(StorageModule) ->
 
 init([StorageModule]) ->
     {ok,
-        {{one_for_one, 5, 10}, [
+        {{rest_for_all, 5, 10}, [
+            #{
+                id => term_key_registerer,
+                start => {term_key_registerer, init, []},
+                restart => permanent,
+                shutdown => 5000,
+                type => worker,
+                modules => [term_key_registerer]
+            },
             #{
                 id => websocket_connection_manager,
                 start => {websocket_connection_manager, start_link, [StorageModule]},
