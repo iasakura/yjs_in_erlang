@@ -18,6 +18,11 @@ init({Key, StorageModule}) ->
                 id => StorageModule,
                 start => {storage_server, start_link, [Key, StorageModule]},
                 restart => permanent
+            },
+            #{
+                id => yjs_doc_synchronizer,
+                start => {yjs_doc_synchronizer, start_link, [Key]},
+                restart => permanent
             }
         ]}}.
 

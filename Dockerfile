@@ -31,7 +31,7 @@ FROM debian:bookworm-slim AS runner
 
 WORKDIR /opt/yjs_in_erlang
 
-ENV COOKIE=yjs_in_erlang \
+ENV COOKIE=yjs_in_erlang_websocket \
     # write files generated during startup to /tmp
     RELX_OUT_FILE_PATH=/tmp
 

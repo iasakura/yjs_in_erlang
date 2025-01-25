@@ -9,6 +9,8 @@
 
 -export([start/2, stop/1]).
 
+-include_lib("kernel/include/logger.hrl").
+
 start(_StartType, _StartArgs) ->
     websocket_connection_manager_sup:start_link(yjs_in_erlang_storage_file),
     Manager = whereis(websocket_connection_manager),
@@ -22,10 +24,28 @@ start(_StartType, _StartArgs) ->
         env => #{dispatch => Dispatch}
     }),
     logger_init(),
+    connect_to_nodes(),
     yjs_in_erlang_websocket_sup:start_link().
 
 stop(_State) ->
     ok = cowboy:stop_listener(http).
+
+connect_to_nodes() ->
+    Nodes =
+        case application:get_env(yjs_in_erlang_websocket, nodes) of
+            {ok, Value} -> Value;
+            undefined -> []
+        end,
+    ?LOG_INFO("Connecting to nodes: ~p", [Nodes]),
+    lists:foreach(
+        fun(Node) ->
+            case Node of
+                Node when is_atom(Node) -> net_kernel:connect_node(Node);
+                Node when is_list(Node) -> net_kernel:connect_node(list_to_atom(Node))
+            end
+        end,
+        Nodes
+    ).
 
 logger_init() ->
     logger:set_primary_config(#{
