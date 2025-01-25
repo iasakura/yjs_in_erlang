@@ -13,13 +13,13 @@
 }).
 
 init({Key, StorageModule}) ->
-    MayBeDoc = global:whereis_name({doc_server, Key}),
+    MayBeDoc = term_key_registerer:get({doc_server, Key}),
     Doc =
         case MayBeDoc of
-            Pid when is_pid(Pid) ->
+            {ok, Pid} ->
                 ?LOG_INFO("Found existing doc ~p", [Pid]),
                 Pid;
-            _ ->
+            undefined ->
                 exit({error, not_found})
         end,
     ?LOG_INFO("Subscribing to updates for doc ~p", [Doc]),

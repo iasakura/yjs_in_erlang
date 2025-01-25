@@ -29,7 +29,7 @@ init({Dir, StorageModule}) ->
     Doc = doc:new(),
     Txn = doc:transact_mut(Doc),
     transaction:apply_update(Txn, Update),
-    global:register_name({doc_server, Dir}, self()),
+    term_key_registerer:register({doc_server, Dir}, self()),
     {ok, #state{doc = Doc}}.
 
 handle_call({get_or_create_text, Name}, _From, State) ->
