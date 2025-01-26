@@ -12,7 +12,6 @@
     get_delete_set/1,
     delete_item/2,
     commit/1,
-    commit/2,
     get_owner/1
 ]).
 %% Callbacks for `gen_server`
@@ -49,10 +48,7 @@ handle_call({delete_item, Item}, _From, State) ->
     {Res, NewState} = internal_delete_item(State, Item),
     {reply, Res, NewState};
 handle_call(commit, _From, State) ->
-    internal_commit(State, self(), true),
-    {reply, ok, State#transaction_mut{committed = true}};
-handle_call({commit, Notified}, _From, State) ->
-    internal_commit(State, self(), Notified),
+    internal_commit(State, self()),
     {reply, ok, State#transaction_mut{committed = true}};
 handle_call(get_owner, _From, State) ->
     {reply, State#transaction_mut.owner, State}.
@@ -113,10 +109,6 @@ delete_item(Txn, Item) ->
 -spec commit(transaction_mut()) -> ok.
 commit(Txn) ->
     gen_server:call(Txn, commit).
-
--spec commit(transaction_mut(), boolean()) -> ok.
-commit(Txn, Notified) ->
-    gen_server:call(Txn, {commit, Notified}).
 
 -spec get_owner(transaction_mut()) -> pid().
 get_owner(Txn) ->
@@ -407,10 +399,10 @@ internal_add_changed_type(Txn, Parent, ParentSub) ->
             Txn
     end.
 
--spec internal_commit(transaction_mut_state(), transaction_mut(), boolean()) -> ok.
-internal_commit(State, Txn, Notified) ->
+-spec internal_commit(transaction_mut_state(), transaction_mut()) -> ok.
+internal_commit(State, Txn) ->
     Store = State#transaction_mut.store,
-    case not Notified or State#transaction_mut.committed of
+    case State#transaction_mut.committed of
         true ->
             ok;
         false ->
