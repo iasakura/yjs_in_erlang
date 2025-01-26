@@ -28,11 +28,18 @@ handle_cast(Request, State) ->
     ?LOG_WARNING("Unexpected cast: ~p", [Request]),
     {noreply, State}.
 
-handle_info({notify, update_v1, Update, _}, State) ->
-    broadcast_msg(State, {sync, update_v1, Update}),
+handle_info({notify, update_v1, Update, Txn}, State) ->
+    ?LOG_DEBUG("Notify update to remote: ~p", [Update]),
+    case transaction:get_owner(Txn) =:= self() of
+        true -> ok;
+        false -> broadcast_msg(State, {sync, update_v1, update:encode_update(Update)})
+    end,
     {noreply, State};
-handle_info({sync, update_v1, Update, _}, State) ->
+handle_info({sync, update_v1, UpdateBin}, State) ->
+    {Update, <<>>} = update:decode_update(UpdateBin),
+    ?LOG_DEBUG("Received update from remote: ~p", [Update]),
     Txn = doc_server:new_transaction(State#state.doc),
+    ?LOG_DEBUG("pid == owner of transaction: ~p", [self() =:= transaction:get_owner(Txn)]),
     transaction:apply_update(Txn, Update),
     transaction:commit(Txn),
     {noreply, State};
@@ -43,7 +50,13 @@ handle_info(Request, State) ->
 broadcast_msg(State, Msg) ->
     lists:foreach(
         fun(Node) ->
-            global:send({Node, yjs_doc_synchronizer, State#state.doc_id}, Msg)
+            case global:whereis_name({Node, yjs_doc_synchronizer, State#state.doc_id}) of
+                undefined ->
+                    ?LOG_WARNING("Node ~p is not available", [Node]),
+                    ok;
+                Pid ->
+                    Pid ! Msg
+            end
         end,
         nodes()
     ).

@@ -3,8 +3,10 @@
 -behaviour(gen_server).
 
 %% Callbacks for `gen_server`
--export([init/1, handle_call/3, handle_cast/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([start_link/0, register/2, get/1, unregister/1]).
+
+-include_lib("kernel/include/logger.hrl").
 
 -record(entry, {
     key :: term(),
@@ -50,7 +52,11 @@ handle_call({unregister, Key}, _From, State) ->
             {reply, true, State}
     end.
 
-handle_cast({'DOWN', Ref, _, _, _}, State) ->
+handle_cast(Request, State) ->
+    ?LOG_WARNING("Unexpected cast: ~p", [Request]),
+    {noreply, State}.
+
+handle_info({'DOWN', Ref, _, _, _}, State) ->
     case ets:lookup(State#state.ref_table, Ref) of
         [] ->
             {noreply, State};
@@ -59,7 +65,7 @@ handle_cast({'DOWN', Ref, _, _, _}, State) ->
             ets:delete(State#state.ref_table, Ref),
             {noreply, State}
     end;
-handle_cast(_Request, State) ->
+handle_info(_Request, State) ->
     {noreply, State}.
 
 -spec start_link() -> gen_server:start_ret().

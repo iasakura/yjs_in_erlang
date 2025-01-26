@@ -1,0 +1,2 @@
+-name ${ERLANG_NODE_NAME}
+-setcookie ${COOKIE}

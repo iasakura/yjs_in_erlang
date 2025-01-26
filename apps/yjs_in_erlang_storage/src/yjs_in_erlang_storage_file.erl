@@ -35,7 +35,9 @@ get_update(Key) ->
                             Loop([Update | Acc], Rest)
                     end
                 end,
-                update:merge_update(Loop([], Bin))
+                X = update:merge_update(Loop([], Bin)),
+                ?LOG_DEBUG("get_update: ~p", [X]),
+                X
             end
     end.
 

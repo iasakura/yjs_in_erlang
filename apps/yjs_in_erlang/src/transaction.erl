@@ -4,6 +4,7 @@
 
 -export([
     new/1,
+    new/2,
     add_changed_type/3,
     apply_update/2,
     apply_delete/2,
@@ -11,6 +12,7 @@
     get_delete_set/1,
     delete_item/2,
     commit/1,
+    commit/2,
     get_owner/1
 ]).
 %% Callbacks for `gen_server`
@@ -19,7 +21,6 @@
 
 -include("../include/constants.hrl").
 -include("../include/records.hrl").
--include_lib("kernel/include/logger.hrl").
 
 -type subdocs() :: #subdocs{}.
 
@@ -27,8 +28,8 @@
 
 -type transaction_mut_state() :: #transaction_mut{}.
 
-init([Doc]) ->
-    {ok, new_state(Doc)}.
+init([Doc, OwnerPid]) ->
+    {ok, new_state(Doc, OwnerPid)}.
 
 handle_call({apply_delete, DeleteSet}, _From, State) ->
     {Rest, Deleted} = internal_apply_delete(State, DeleteSet),
@@ -48,7 +49,10 @@ handle_call({delete_item, Item}, _From, State) ->
     {Res, NewState} = internal_delete_item(State, Item),
     {reply, Res, NewState};
 handle_call(commit, _From, State) ->
-    internal_commit(State, self()),
+    internal_commit(State, self(), true),
+    {reply, ok, State#transaction_mut{committed = true}};
+handle_call({commit, Notified}, _From, State) ->
+    internal_commit(State, self(), Notified),
     {reply, ok, State#transaction_mut{committed = true}};
 handle_call(get_owner, _From, State) ->
     {reply, State#transaction_mut.owner, State}.
@@ -58,11 +62,15 @@ handle_cast(_Request, State) ->
 
 -spec new(doc:doc()) -> transaction_mut().
 new(Doc) ->
-    {ok, Pid} = gen_server:start_link(?MODULE, [Doc], []),
+    new(Doc, self()).
+
+-spec new(doc:doc(), pid()) -> transaction_mut().
+new(Doc, OwnerPid) ->
+    {ok, Pid} = gen_server:start_link(?MODULE, [Doc, OwnerPid], []),
     Pid.
 
--spec new_state(doc:doc()) -> transaction_mut_state().
-new_state(Doc) ->
+-spec new_state(doc:doc(), pid()) -> transaction_mut_state().
+new_state(Doc, OwnerPid) ->
     #transaction_mut{
         store = Doc#doc.store,
         before_state = block_store:get_state_vector(Doc#doc.store#store.blocks),
@@ -75,7 +83,7 @@ new_state(Doc) ->
         subdocs = undefined,
         doc = Doc,
         committed = false,
-        owner = self()
+        owner = OwnerPid
     }.
 
 -spec apply_delete(transaction_mut(), update:delete_set()) -> update:delete_set().
@@ -105,6 +113,10 @@ delete_item(Txn, Item) ->
 -spec commit(transaction_mut()) -> ok.
 commit(Txn) ->
     gen_server:call(Txn, commit).
+
+-spec commit(transaction_mut(), boolean()) -> ok.
+commit(Txn, Notified) ->
+    gen_server:call(Txn, {commit, Notified}).
 
 -spec get_owner(transaction_mut()) -> pid().
 get_owner(Txn) ->
@@ -395,10 +407,10 @@ internal_add_changed_type(Txn, Parent, ParentSub) ->
             Txn
     end.
 
--spec internal_commit(transaction_mut_state(), transaction_mut()) -> ok.
-internal_commit(State, Txn) ->
+-spec internal_commit(transaction_mut_state(), transaction_mut(), boolean()) -> ok.
+internal_commit(State, Txn, Notified) ->
     Store = State#transaction_mut.store,
-    case State#transaction_mut.committed of
+    case not Notified or State#transaction_mut.committed of
         true ->
             ok;
         false ->

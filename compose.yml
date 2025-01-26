@@ -1,21 +1,27 @@
 services:
   yjs_in_erlang_websocket_server1:
-    build: .
+    image: yjs_in_erlang_websocket:18343ce2e544e747fbff798744b6eff22d77cf53
+    hostname: yjs_in_erlang_websocket_server1.com
     container_name: yjs_in_erlang_websocket_server1
     ports:
       - "3001:3000"
     environment:
-      - YJS_IN_ERLANG_NODES="yjs_in_erlang_websocket@yjs_in_erlang_websocket_server2"
+      - YJS_IN_ERLANG_NODES="yjs_in_erlang@yjs_in_erlang_websocket_server2.com"
+      - ERLANG_NODE_NAME="yjs_in_erlang@yjs_in_erlang_websocket_server1.com"
+      - COOKIE="yjs_in_erlang"
     networks:
       - app_network
 
   yjs_in_erlang_websocket_server2:
-    build: .
+    image: yjs_in_erlang_websocket:18343ce2e544e747fbff798744b6eff22d77cf53
+    hostname: yjs_in_erlang_websocket_server2.com
     container_name: yjs_in_erlang_websocket_server2
     ports:
       - "3002:3000"
     environment:
-      - YJS_IN_ERLANG_NODES="yjs_in_erlang_websocket@yjs_in_erlang_websocket_server1"
+      - YJS_IN_ERLANG_NODES="yjs_in_erlang@yjs_in_erlang_websocket_server1.com"
+      - ERLANG_NODE_NAME="yjs_in_erlang@yjs_in_erlang_websocket_server2.com"
+      - COOKIE="yjs_in_erlang"
     networks:
       - app_network
 

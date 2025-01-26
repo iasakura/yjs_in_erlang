@@ -36,13 +36,17 @@ connect_to_nodes() ->
             {ok, Value} -> Value;
             undefined -> []
         end,
-    ?LOG_INFO("Connecting to nodes: ~p", [Nodes]),
+    ?LOG_INFO("cookie: ~p", [erlang:get_cookie()]),
     lists:foreach(
         fun(Node) ->
-            case Node of
-                Node when is_atom(Node) -> net_kernel:connect_node(Node);
-                Node when is_list(Node) -> net_kernel:connect_node(list_to_atom(Node))
-            end
+            Res =
+                case Node of
+                    Node when is_atom(Node) -> net_kernel:connect_node(Node);
+                    Node when is_list(Node) ->
+                        Atom = list_to_atom(Node),
+                        net_kernel:connect_node(Atom)
+                end,
+            ?LOG_INFO("Connected to node ~p: ~p", [Node, Res])
         end,
         Nodes
     ).

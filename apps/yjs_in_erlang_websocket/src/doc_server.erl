@@ -51,9 +51,9 @@ handle_call(get_state_vector, _From, State) ->
 handle_call(get_monitor, _From, State) ->
     Doc = State#state.doc,
     {reply, doc:get_monitor(Doc), State};
-handle_call(new_transaction, _From, State) ->
+handle_call(new_transaction, {From, _}, State) ->
     Doc = State#state.doc,
-    {reply, transaction:new(Doc), State};
+    {reply, transaction:new(Doc, From), State};
 handle_call(Request, _From, State) ->
     ?LOG_WARNING("Unknown request: ~p", [Request]),
     {reply, {error, {unknown_request, Request}}, State}.
