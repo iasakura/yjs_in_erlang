@@ -1,0 +1,7 @@
+[
+    {yjs_in_erlang_websocket, [
+        {nodes, [
+            ${YJS_IN_ERLANG_NODES}
+        ]}
+    ]}
+].
