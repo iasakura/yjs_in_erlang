@@ -58,8 +58,8 @@ websocket_init({Manager, Room}) ->
 % 0 means syncMessage
 websocket_handle({binary, <<0:8, Msg/binary>>}, State) ->
     {YMsg, _} = protocol:decode_sync_message(Msg),
-    Msgs = message_handler:handle_msg(YMsg, State),
-    {Msgs, State};
+    Msgs = message_handler:handle_msg(YMsg, State#ws_local_state.doc),
+    {[{binary, protocol:encode_sync_message(M)} || M <- Msgs], State};
 % 0 means awarenessMessage
 websocket_handle({binary, <<1:8, _>>}, State) ->
     % TODO: implement

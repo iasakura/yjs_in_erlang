@@ -18,6 +18,7 @@
 init(DocId) ->
     {ok, Doc} = term_key_registerer:get({doc_server, DocId}),
     doc_server:subscribe_update_v1(Doc),
+    send_sync_step1(Doc),
     {ok, #state{doc = Doc, doc_id = DocId}}.
 
 handle_call(_Request, _From, State) ->
@@ -31,17 +32,18 @@ handle_cast(Request, State) ->
 handle_info({notify, update_v1, Update, Txn}, State) ->
     ?LOG_DEBUG("Notify update to remote: ~p", [Update]),
     case transaction:get_owner(Txn) =:= self() of
-        true -> ok;
-        false -> broadcast_msg(State, {sync, update_v1, update:encode_update(Update)})
+        true ->
+            ok;
+        false ->
+            broadcast_msg(State, {sync, protocol:encode_sync_message({update, Update}), self()})
     end,
     {noreply, State};
-handle_info({sync, update_v1, UpdateBin}, State) ->
-    {Update, <<>>} = update:decode_update(UpdateBin),
-    ?LOG_DEBUG("Received update from remote: ~p", [Update]),
-    Txn = doc_server:new_transaction(State#state.doc),
-    ?LOG_DEBUG("pid == owner of transaction: ~p", [self() =:= transaction:get_owner(Txn)]),
-    transaction:apply_update(Txn, Update),
-    transaction:commit(Txn),
+handle_info({sync, MsgBin}, State) ->
+    {Msg, <<>>} = protocol:decode_sync_message(MsgBin),
+    Msgs = message_handler:handle_msg(Msg, State#state.doc),
+    lists:foreach(
+        fun(M) -> broadcast_msg(State, {sync, protocol:encode_sync_message(M)}) end, Msgs
+    ),
     {noreply, State};
 handle_info(Request, State) ->
     ?LOG_WARNING("Unexpected message: ~p", [Request]),
@@ -60,6 +62,18 @@ broadcast_msg(State, Msg) ->
         end,
         nodes()
     ).
+
+-spec send_sync_step1(doc_server:doc()) -> ok.
+send_sync_step1(Doc) ->
+    case nodes() of
+        [] ->
+            ok;
+        [Node | _] ->
+            Node !
+                {sync, protocol:encode_sync_message({sync_step1, doc_server:get_state_vector(Doc)}),
+                    self()},
+            ok
+    end.
 
 -spec start_link(binary()) -> gen_server:start_ret().
 start_link(DocId) ->

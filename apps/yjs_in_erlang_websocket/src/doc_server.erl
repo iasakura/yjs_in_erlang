@@ -16,7 +16,8 @@
     subscribe_update_v1/1,
     get_state_vector/1,
     get_monitor/1,
-    new_transaction/1
+    new_transaction/1,
+    has_pendings/1
 ]).
 -export_type([doc/0]).
 
@@ -54,6 +55,9 @@ handle_call(get_monitor, _From, State) ->
 handle_call(new_transaction, {From, _}, State) ->
     Doc = State#state.doc,
     {reply, transaction:new(Doc, From), State};
+handle_call(has_pendings, _From, State) ->
+    Doc = State#state.doc,
+    {reply, doc:has_pendings(Doc), State};
 handle_call(Request, _From, State) ->
     ?LOG_WARNING("Unknown request: ~p", [Request]),
     {reply, {error, {unknown_request, Request}}, State}.
@@ -92,3 +96,7 @@ get_monitor(Doc) ->
 -spec new_transaction(pid()) -> transaction:transaction_mut().
 new_transaction(Doc) ->
     gen_server:call(Doc, new_transaction).
+
+-spec has_pendings(pid()) -> boolean().
+has_pendings(Doc) ->
+    gen_server:call(Doc, has_pendings).
