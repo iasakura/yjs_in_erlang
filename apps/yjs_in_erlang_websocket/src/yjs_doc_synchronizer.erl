@@ -18,6 +18,7 @@
 init(DocId) ->
     {ok, Doc} = term_key_registerer:get({doc_server, DocId}),
     doc_server:subscribe_update_v1(Doc),
+    send_sync_step1(Doc),
     {ok, #state{doc = Doc, doc_id = DocId}}.
 
 handle_call(_Request, _From, State) ->
@@ -61,6 +62,18 @@ broadcast_msg(State, Msg) ->
         end,
         nodes()
     ).
+
+-spec send_sync_step1(doc_server:doc()) -> ok.
+send_sync_step1(Doc) ->
+    case nodes() of
+        [] ->
+            ok;
+        [Node | _] ->
+            Node !
+                {sync, protocol:encode_sync_message({sync_step1, doc_server:get_state_vector(Doc)}),
+                    self()},
+            ok
+    end.
 
 -spec start_link(binary()) -> gen_server:start_ret().
 start_link(DocId) ->
