@@ -9,7 +9,8 @@
     subscribe_update_v1/1,
     subscribe_update_v1/2,
     get_state_vector/1,
-    get_monitor/1
+    get_monitor/1,
+    has_pendings/1
 ]).
 -export_type([doc/0]).
 
@@ -92,3 +93,8 @@ get_state_vector(Doc) ->
 -spec get_monitor(doc()) -> doc_monitor:doc_monitor().
 get_monitor(Doc) ->
     Doc#doc.store#store.doc_monitor.
+
+-spec has_pendings(doc()) -> boolean().
+has_pendings(Doc) ->
+    option:is_some(Doc#doc.store#store.pending) orelse
+        option:is_some(Doc#doc.store#store.pending_ds).

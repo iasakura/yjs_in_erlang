@@ -2,20 +2,27 @@
 
 -export([handle_msg/2]).
 
--include("../include/records.hrl").
-
--spec handle_msg(protocol:sync_messages(), websocket_connection_manager:ws_local_state()) ->
-    cowboy_websocket:commands().
-handle_msg({sync_step1, StateVector}, #ws_local_state{doc = Doc}) ->
+-spec handle_msg(protocol:sync_messages(), doc_server:doc()) -> [protocol:sync_messages()].
+handle_msg({sync_step1, StateVector}, Doc) ->
     Update = doc_server:get_update(Doc, StateVector),
-    [{binary, protocol:encode_sync_message({sync_step2, Update})}];
-handle_msg({sync_step2, Update}, #ws_local_state{doc = Doc}) ->
+    [{sync_step2, Update}];
+handle_msg({sync_step2, Update}, Doc) ->
     Txn = doc_server:new_transaction(Doc),
     transaction:apply_update(Txn, Update),
     transaction:commit(Txn),
-    [];
-handle_msg({update, Update}, #ws_local_state{doc = Doc}) ->
+    case doc_server:has_pendings(Doc) of
+        true ->
+            [{sync_step1, doc_server:get_state_vector(Doc)}];
+        false ->
+            []
+    end;
+handle_msg({update, Update}, Doc) ->
     Txn = doc_server:new_transaction(Doc),
     transaction:apply_update(Txn, Update),
     transaction:commit(Txn),
-    [].
+    case doc_server:has_pendings(Doc) of
+        true ->
+            [{sync_step1, doc_server:get_state_vector(Doc)}];
+        false ->
+            []
+    end.
