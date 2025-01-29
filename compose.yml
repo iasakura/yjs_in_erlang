@@ -1,6 +1,6 @@
 services:
   yjs_in_erlang_websocket_server1:
-    image: yjs_in_erlang_websocket:18343ce2e544e747fbff798744b6eff22d77cf53
+    image: yjs_in_erlang_websocket:${IMAGE_TAG:-latest}
     hostname: yjs_in_erlang_websocket_server1.com
     container_name: yjs_in_erlang_websocket_server1
     ports:
@@ -13,7 +13,7 @@ services:
       - app_network
 
   yjs_in_erlang_websocket_server2:
-    image: yjs_in_erlang_websocket:18343ce2e544e747fbff798744b6eff22d77cf53
+    image: yjs_in_erlang_websocket:${IMAGE_TAG:-latest}
     hostname: yjs_in_erlang_websocket_server2.com
     container_name: yjs_in_erlang_websocket_server2
     ports:
