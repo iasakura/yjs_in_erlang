@@ -14,7 +14,7 @@ build-image:
 	@echo "IMAGE_TAG=$(TAG)" > .env  # Save latest tag for Docker Compose
 
 up: build-image
-	docker-compose up
+	docker-compose up --force-recreate
 
 test:
 	rebar3 eunit
