@@ -31,12 +31,13 @@ stop(_State) ->
     ok = cowboy:stop_listener(http).
 
 connect_to_nodes() ->
-    Nodes =
+    NodesStr =
         case application:get_env(yjs_in_erlang_websocket, nodes) of
             {ok, Value} -> Value;
             undefined -> []
         end,
     ?LOG_INFO("cookie: ~p", [erlang:get_cookie()]),
+    Nodes = string:tokens(NodesStr, " "),
     lists:foreach(
         fun(Node) ->
             Res =

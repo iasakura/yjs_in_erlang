@@ -6,7 +6,7 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - YJS_IN_ERLANG_NODES="yjs_in_erlang@yjs_in_erlang_websocket_server2.com"
+      - YJS_IN_ERLANG_NODES="${NODES}"
       - ERLANG_NODE_NAME="yjs_in_erlang@yjs_in_erlang_websocket_server1.com"
       - COOKIE="yjs_in_erlang"
     networks:
@@ -19,8 +19,21 @@ services:
     ports:
       - "3002:3000"
     environment:
-      - YJS_IN_ERLANG_NODES="yjs_in_erlang@yjs_in_erlang_websocket_server1.com"
+      - YJS_IN_ERLANG_NODES="${NODES}"
       - ERLANG_NODE_NAME="yjs_in_erlang@yjs_in_erlang_websocket_server2.com"
+      - COOKIE="yjs_in_erlang"
+    networks:
+      - app_network
+
+  yjs_in_erlang_websocket_server3:
+    image: yjs_in_erlang_websocket:${IMAGE_TAG:-latest}
+    hostname: yjs_in_erlang_websocket_server3.com
+    container_name: yjs_in_erlang_websocket_server3
+    ports:
+      - "3003:3000"
+    environment:
+      - YJS_IN_ERLANG_NODES="${NODES}"
+      - ERLANG_NODE_NAME="yjs_in_erlang@yjs_in_erlang_websocket_server3.com"
       - COOKIE="yjs_in_erlang"
     networks:
       - app_network
@@ -37,6 +50,7 @@ services:
     depends_on:
       - yjs_in_erlang_websocket_server1
       - yjs_in_erlang_websocket_server2
+      - yjs_in_erlang_websocket_server3
 
 networks:
   app_network:
