@@ -10,7 +10,7 @@ This is a pure Erlang implementation of Yjs/Yrs, created as a learning project. 
 Start the backend with the following command:
 
 ```sh
-rebar3 shell
+make up
 ```
 
 ### Frontend
