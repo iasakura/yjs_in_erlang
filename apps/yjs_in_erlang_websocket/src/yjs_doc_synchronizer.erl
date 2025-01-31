@@ -18,7 +18,7 @@
 init(DocId) ->
     {ok, Doc} = term_key_registerer:get({doc_server, DocId}),
     doc_server:subscribe_update_v1(Doc),
-    send_sync_step1(Doc),
+    init_sync(Doc, DocId),
     {ok, #state{doc = Doc, doc_id = DocId}}.
 
 handle_call(_Request, _From, State) ->
@@ -38,12 +38,30 @@ handle_info({notify, update_v1, Update, Txn}, State) ->
             broadcast_msg(State, {sync, protocol:encode_sync_message({update, Update}), self()})
     end,
     {noreply, State};
-handle_info({sync, MsgBin}, State) ->
+handle_info({sync, <<0:8, MsgBin/binary>>, From}, State) ->
+    ?LOG_DEBUG("Received sync message: ~p", [MsgBin]),
     {Msg, <<>>} = protocol:decode_sync_message(MsgBin),
     Msgs = message_handler:handle_msg(Msg, State#state.doc),
     lists:foreach(
-        fun(M) -> broadcast_msg(State, {sync, protocol:encode_sync_message(M)}) end, Msgs
+        fun(M) -> From ! {sync, protocol:encode_sync_message(M), self()} end,
+        Msgs
     ),
+    {noreply, State};
+handle_info({timeout, _, {sync_with_nodes, Nodes}}, State) ->
+    {Next, Nodes2} =
+        case Nodes of
+            [] ->
+                {undefined, nodes()};
+            [Node | Rest] ->
+                {{ok, Node}, Rest}
+        end,
+    case Next of
+        undefined ->
+            ok;
+        {ok, Node2} ->
+            send_sync_step1_to_node(State#state.doc_id, State#state.doc, Node2)
+    end,
+    erlang:start_timer(1000, self(), {sync_with_nodes, Nodes2}),
     {noreply, State};
 handle_info(Request, State) ->
     ?LOG_WARNING("Unexpected message: ~p", [Request]),
@@ -63,14 +81,27 @@ broadcast_msg(State, Msg) ->
         nodes()
     ).
 
--spec send_sync_step1(doc_server:doc()) -> ok.
-send_sync_step1(Doc) ->
+-spec init_sync(doc_server:doc(), binary()) -> reference().
+init_sync(Doc, DocId) ->
     case nodes() of
         [] ->
+            erlang:start_timer(1000, self(), {sync_with_nodes, []});
+        [Node | Nodes] ->
+            send_sync_step1_to_node(DocId, Doc, Node),
+            erlang:start_timer(1000, self(), {sync_with_nodes, Nodes})
+    end.
+
+-spec send_sync_step1_to_node(binary(), doc_server:doc(), node()) -> ok.
+send_sync_step1_to_node(DocId, Doc, Node) ->
+    case global:whereis_name({Node, yjs_doc_synchronizer, DocId}) of
+        undefined ->
             ok;
-        [Node | _] ->
-            Node !
-                {sync, protocol:encode_sync_message({sync_step1, doc_server:get_state_vector(Doc)}),
+        Pid ->
+            Pid !
+                {sync,
+                    protocol:encode_sync_message(
+                        {sync_step1, doc_server:get_state_vector(Doc)}
+                    ),
                     self()},
             ok
     end.
