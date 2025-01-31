@@ -39,6 +39,7 @@ handle_info({notify, update_v1, Update, Txn}, State) ->
     end,
     {noreply, State};
 handle_info({sync, <<0:8, MsgBin/binary>>, From}, State) ->
+    ?LOG_DEBUG("Received sync message: ~p", [MsgBin]),
     {Msg, <<>>} = protocol:decode_sync_message(MsgBin),
     Msgs = message_handler:handle_msg(Msg, State#state.doc),
     lists:foreach(
@@ -46,7 +47,7 @@ handle_info({sync, <<0:8, MsgBin/binary>>, From}, State) ->
         Msgs
     ),
     {noreply, State};
-handle_info({timeout, _, {sync, Nodes}}, State) ->
+handle_info({timeout, _, {sync_with_nodes, Nodes}}, State) ->
     {Next, Nodes2} =
         case Nodes of
             [] ->
@@ -60,7 +61,7 @@ handle_info({timeout, _, {sync, Nodes}}, State) ->
         {ok, Node2} ->
             send_sync_step1_to_node(State#state.doc_id, State#state.doc, Node2)
     end,
-    erlang:start_timer(1000, self(), {sync, Nodes2}),
+    erlang:start_timer(1000, self(), {sync_with_nodes, Nodes2}),
     {noreply, State};
 handle_info(Request, State) ->
     ?LOG_WARNING("Unexpected message: ~p", [Request]),
@@ -84,10 +85,10 @@ broadcast_msg(State, Msg) ->
 init_sync(Doc, DocId) ->
     case nodes() of
         [] ->
-            erlang:start_timer(1000, self(), {sync, []});
+            erlang:start_timer(1000, self(), {sync_with_nodes, []});
         [Node | Nodes] ->
             send_sync_step1_to_node(DocId, Doc, Node),
-            erlang:start_timer(1000, self(), {sync, Nodes})
+            erlang:start_timer(1000, self(), {sync_with_nodes, Nodes})
     end.
 
 -spec send_sync_step1_to_node(binary(), doc_server:doc(), node()) -> ok.

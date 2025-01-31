@@ -27,14 +27,14 @@ decode_sync_message(<<0:8, Bin/binary>>) ->
     {Len, Rest0} = var_int:decode_uint(Bin),
     Buf = binary:part(Rest0, 0, Len),
     {StateVector, _} = state_vector:decode_state_vector(Buf),
-    {{sync_step1, StateVector}, Rest0};
+    {{sync_step1, StateVector}, binary:part(Rest0, Len, byte_size(Rest0) - Len)};
 decode_sync_message(<<1:8, Bin/binary>>) ->
     {Len, Rest0} = var_int:decode_uint(Bin),
     Buf = binary:part(Rest0, 0, Len),
     {Update, _} = update:decode_update(Buf),
-    {{sync_step2, Update}, Rest0};
+    {{sync_step2, Update}, binary:part(Rest0, Len, byte_size(Rest0) - Len)};
 decode_sync_message(<<2:8, Bin/binary>>) ->
     {Len, Rest0} = var_int:decode_uint(Bin),
     Buf = binary:part(Rest0, 0, Len),
     {Update, _} = update:decode_update(Buf),
-    {{update, Update}, Rest0}.
+    {{update, Update}, binary:part(Rest0, Len, byte_size(Rest0) - Len)}.
