@@ -7,6 +7,8 @@ check:
 	rebar3 eunit
 
 TAG := $(shell git rev-parse --short HEAD)$(shell git diff --quiet && git diff --cached --quiet || echo "-dirty")
+REGION := asia-east2
+PROJECT := lucky-antler-449601-f2
 
 build-image:
 	@echo "Building Docker image with tag: $(TAG)"
@@ -15,7 +17,8 @@ build-image:
 
 # Push the image to Github Container Registry
 push-image: build-image
-	docker push ghcr.io/erlangbureau/yjs_in_erlang_websocket:$(TAG)
+	docker tag yjs_in_erlang_websocket:$(TAG) $(REGION)-docker.pkg.dev/$(PROJECT)/yjs-in-erlang/yjs_in_erlang_websocket:$(TAG)
+	docker push $(REGION)-docker.pkg.dev/$(PROJECT)/yjs-in-erlang/yjs_in_erlang_websocket:$(TAG)
 
 up: build-image
 	docker-compose up --force-recreate
