@@ -13,6 +13,10 @@ build-image:
 	docker buildx build -o type=docker --target runner --tag yjs_in_erlang_websocket:$(TAG) .
 	@echo "IMAGE_TAG=$(TAG)" > .env  # Save latest tag for Docker Compose
 
+# Push the image to Github Container Registry
+push-image: build-image
+	docker push ghcr.io/erlangbureau/yjs_in_erlang_websocket:$(TAG)
+
 up: build-image
 	docker-compose up --force-recreate
 

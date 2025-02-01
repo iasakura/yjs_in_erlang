@@ -1,0 +1,21 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        otp_version: ["26.1.2"]
+        rebar3_version: ["3.24.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp_version }}
+          rebar3-version: ${{ matrix.rebar3_version }}
+      - run: make push-image
