@@ -18,4 +18,15 @@ jobs:
         with:
           otp-version: ${{ matrix.otp_version }}
           rebar3-version: ${{ matrix.rebar3_version }}
-      - run: make push-image
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: set tag
+        id: set_tag
+        run: echo TAG=$(shell git rev-parse --short HEAD)$(shell git diff --quiet && git diff --cached --quiet || echo "-dirty") >> $GITHUB_OUTPUT
+
+      - name: build image
+        run: docker buildx build -o type=docker --target runner --tag yjs_in_erlang_websocket:${{ steps.set_tag.outputs.TAG }} .
+
+      - name: push image
+        run: docker push ghcr.io/yjs_in_erlang_websocket:${{ steps.set_tag.outputs.TAG }}
