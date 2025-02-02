@@ -1,2 +1,2 @@
--name ${ERLANG_NODE_NAME}
+-name yjs_in_erlang@${HOSTNAME}
 -setcookie ${COOKIE}

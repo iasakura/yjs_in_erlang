@@ -22,7 +22,7 @@ services:
       - "3001:3000"
     environment:
       <<: *ws-env
-      ERLANG_NODE_NAME: "yjs_in_erlang@yjs_in_erlang_websocket_server1.com"
+      HOSTNAME: "yjs_in_erlang_websocket_server1.com"
 
   yjs_in_erlang_websocket_server2:
     <<: *default-websocket
@@ -32,7 +32,7 @@ services:
       - "3002:3000"
     environment:
       <<: *ws-env
-      ERLANG_NODE_NAME: "yjs_in_erlang@yjs_in_erlang_websocket_server2.com"
+      HOSTNAME: "yjs_in_erlang_websocket_server2.com"
 
   yjs_in_erlang_websocket_server3:
     <<: *default-websocket
@@ -42,7 +42,7 @@ services:
       - "3003:3000"
     environment:
       <<: *ws-env
-      ERLANG_NODE_NAME: "yjs_in_erlang@yjs_in_erlang_websocket_server3.com"
+      HOSTNAME: "yjs_in_erlang_websocket_server3.com"
 
   nginx:
     image: nginx:latest
