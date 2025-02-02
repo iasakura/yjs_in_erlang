@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 -export([
-    start_link/1, get_doc/2, get_or_create_doc/2, disconnect/2
+    start_link/1, get_doc/2, get_or_create_doc/3, disconnect/2
 ]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export_type([ws_connection_manager/0, ws_global_state/0, ws_shared_doc/0, ws_local_state/0]).
@@ -26,9 +26,9 @@
 start_link(StorageModule) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [StorageModule], []).
 
--spec get_or_create_doc(ws_connection_manager(), binary()) -> doc_server:doc().
-get_or_create_doc(Manager, DocId) ->
-    gen_server:call(Manager, {get_or_create_doc, DocId}).
+-spec get_or_create_doc(ws_connection_manager(), binary(), string()) -> doc_server:doc().
+get_or_create_doc(Manager, DocId, StoreDir) ->
+    gen_server:call(Manager, {get_or_create_doc, DocId, StoreDir}).
 
 -spec get_doc(ws_connection_manager(), binary()) -> option:option(doc_server:doc()).
 get_doc(Manager, DocId) ->
@@ -49,8 +49,8 @@ init([StorageModule]) ->
 
 -spec handle_call(tuple(), {pid(), term()}, ws_global_state()) ->
     {reply, term(), ws_global_state()}.
-handle_call({get_or_create_doc, DocId}, {From, _}, State) ->
-    {Doc, NewState} = get_or_create_doc_impl(State, DocId, From),
+handle_call({get_or_create_doc, DocId, StoreDir}, {From, _}, State) ->
+    {Doc, NewState} = get_or_create_doc_impl(State, DocId, StoreDir, From),
     {reply, Doc, NewState};
 handle_call({get_doc, DocId}, _From, State) ->
     case maps:find(DocId, State#ws_global_state.docs) of
@@ -133,9 +133,9 @@ handle_info(Info, State) ->
     {noreply, State}.
 
 %%% Internal functions
--spec get_or_create_doc_impl(ws_global_state(), binary(), pid()) ->
+-spec get_or_create_doc_impl(ws_global_state(), binary(), string(), pid()) ->
     {doc_server:doc(), ws_global_state()}.
-get_or_create_doc_impl(State, DocId, From) ->
+get_or_create_doc_impl(State, DocId, StoreDir, From) ->
     case maps:find(DocId, State#ws_global_state.docs) of
         {ok, Doc} ->
             ?LOG_INFO("Reusing an opened document: ~p~n", [DocId]),
@@ -149,7 +149,9 @@ get_or_create_doc_impl(State, DocId, From) ->
             {DocServer, NewState};
         error ->
             ?LOG_INFO("Creating a new document: ~p~n", [DocId]),
-            {ok, Sup} = doc_sup:start_link(DocId, State#ws_global_state.storage_module),
+            {ok, Sup} = doc_sup:start_link(
+                filename:join(StoreDir, DocId), State#ws_global_state.storage_module
+            ),
             process_flag(trap_exit, true),
             Doc = doc_sup:get_child_doc(Sup),
             ClientMonitorRef = monitor(process, From),

@@ -13,14 +13,14 @@
 
 -type ws_local_state() :: websocket_connection_manager:ws_local_state().
 
--spec init(cowboy_req:req(), websocket_connection_manager:ws_connection_manager()) ->
+-spec init(cowboy_req:req(), {websocket_connection_manager:ws_connection_manager(), string()}) ->
     {cowboy_websocket, cowboy_req:req(), {
-        websocket_connection_manager:ws_connection_manager(), binary()
+        websocket_connection_manager:ws_connection_manager(), binary(), string()
     }}
     | {ok, cowboy_req:req(), binary()}.
-init(Req, Manager) ->
+init(Req, {Manager, StoreDir}) ->
     {PeerAddress, PeerPort} = cowboy_req:peer(Req),
-    io:format("Accessed from : ~p:~p~n", [PeerAddress, PeerPort]),
+    ?LOG_INFO("Accessed from : ~p:~p~n", [PeerAddress, PeerPort]),
     Rest = cowboy_req:path_info(Req),
     case Rest of
         undefined ->
@@ -29,13 +29,13 @@ init(Req, Manager) ->
         _ ->
             Room = lists:foldl(fun(X, Acc) -> <<Acc/binary, "_", X/binary>> end, <<>>, Rest),
             ?LOG_INFO("Manager: ~p, Room: ~p", [Manager, Room]),
-            {cowboy_websocket, Req, {Manager, Room}}
+            {cowboy_websocket, Req, {Manager, Room, StoreDir}}
     end.
 
--spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary()}) ->
+-spec websocket_init({websocket_connection_manager:ws_connection_manager(), binary(), string()}) ->
     {cowboy_websocket:commands(), ws_local_state()}.
-websocket_init({Manager, Room}) ->
-    Doc = websocket_connection_manager:get_or_create_doc(Manager, Room),
+websocket_init({Manager, Room, StoreDir}) ->
+    Doc = websocket_connection_manager:get_or_create_doc(Manager, Room, StoreDir),
     MonitorRef = monitor(process, Doc),
     doc_server:subscribe_update_v1(Doc),
     State = #ws_local_state{

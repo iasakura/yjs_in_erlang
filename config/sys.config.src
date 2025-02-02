@@ -1,5 +1,6 @@
 [
     {yjs_in_erlang_websocket, [
-        {nodes, ${YJS_IN_ERLANG_NODES}}
+        {nodes, "${YJS_IN_ERLANG_NODES}"},
+        {store_dir, "${YJS_IN_ERLANG_STORE_DIR}"}
     ]}
 ].

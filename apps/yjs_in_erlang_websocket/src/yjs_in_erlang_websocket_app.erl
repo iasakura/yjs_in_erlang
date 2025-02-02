@@ -14,9 +14,14 @@
 start(_StartType, _StartArgs) ->
     websocket_connection_manager_sup:start_link(yjs_in_erlang_storage_file),
     Manager = whereis(websocket_connection_manager),
+    StoreDir =
+        case application:get_env(yjs_in_erlang_websocket, store_dir) of
+            {ok, Value} -> Value;
+            undefined -> "."
+        end,
     Dispatch = cowboy_router:compile([
         {'_', [
-            {"/ws/[...]", websocket_handler, Manager}
+            {"/ws/[...]", websocket_handler, {Manager, StoreDir}}
         ]}
     ]),
     {ok, _} = cowboy:start_clear(http, [{port, 3000}], #{

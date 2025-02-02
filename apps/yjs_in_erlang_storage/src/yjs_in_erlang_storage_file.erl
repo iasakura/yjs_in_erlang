@@ -8,20 +8,20 @@
 -export([start_link/1]).
 
 -record(state, {
-    key :: binary()
+    filepath :: binary()
 }).
 
-init(Key) ->
-    {ok, #state{key = Key}}.
+init(FilePath) ->
+    {ok, #state{filepath = FilePath}}.
 
 on_update(State, Update) ->
     ?LOG_DEBUG("on_update: ~p", [State]),
-    {ok, File} = file:open(<<"./", (State#state.key)/binary>>, [append]),
+    {ok, File} = file:open(State#state.filepath, [append]),
     file:write(File, update:encode_update(Update)),
     file:close(File).
 
-get_update(Key) ->
-    case file:read_file(<<"./", Key/binary>>) of
+get_update(FilePath) ->
+    case file:read_file(FilePath) of
         {error, enoent} ->
             update:new();
         {ok, Bin} ->
@@ -41,5 +41,5 @@ get_update(Key) ->
             end
     end.
 
-start_link(Key) ->
-    yjs_in_erlang_storage:start_link(?MODULE, Key).
+start_link(FilePath) ->
+    yjs_in_erlang_storage:start_link(?MODULE, FilePath).
