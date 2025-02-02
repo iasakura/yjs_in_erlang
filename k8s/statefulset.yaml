@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yjs-in-erlang-websocket
+spec:
+  serviceName: "yjs-in-erlang-websocket"
+  replicas: 3 # 初期レプリカ数
+  selector:
+    matchLabels:
+      app: yjs-in-erlang-websocket
+  template:
+    metadata:
+      labels:
+        app: yjs-in-erlang-websocket
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: yjs-in-erlang-websocket
+              topologyKey: "kubernetes.io/hostname" # 各レプリカを異なるノードにスケジュール
+      containers:
+        - name: yjs-in-erlang-websocket
+          image: asia-east2-docker.pkg.dev/lucky-antler-449601-f2/yjs-in-erlang/yjs_in_erlang_websocket:4739998
+          ports:
+            - containerPort: 3000 # DBの通信ポート
+          volumeMounts:
+            - name: data
+              mountPath: /mnt
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          envFrom:
+            - configMapRef:
+                name: yjs-in-erlang-websocket-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi # 各レプリカのストレージサイズ
+        storageClassName: "standard" # 必要に応じてストレージクラスを変更
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yjs-in-erlang-websocket
+spec:
+  clusterIP: None # Headless Service
+  selector:
+    app: example

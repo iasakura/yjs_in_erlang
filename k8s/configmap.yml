@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yjs-in-erlang-websocket-config
+data:
+  NODES: "yjs_in_erlang@yjs-in-erlang-websocket-0.yjs-in-erlang-websocket.default.svc.cluster.local yjs_in_erlang@yjs-in-erlang-websocket-1.yjs-in-erlang-websocket.default.svc.cluster.local yjs_in_erlang@yjs-in-erlang-websocket-2.yjs-in-erlang-websocket.default.svc.cluster.local"
+  COOKIE: "yjs_in_erlang"
+  YJS_IN_ERLANG_STORE_DIR: "/mnt"
