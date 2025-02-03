@@ -21,7 +21,8 @@ start(_StartType, _StartArgs) ->
         end,
     Dispatch = cowboy_router:compile([
         {'_', [
-            {"/ws/[...]", websocket_handler, {Manager, StoreDir}}
+            {"/ws/[...]", websocket_handler, {Manager, StoreDir}},
+            {"/", health_handler, []}
         ]}
     ]),
     {ok, _} = cowboy:start_clear(http, [{port, 3000}], #{
