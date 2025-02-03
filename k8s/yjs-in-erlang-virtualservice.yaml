@@ -1,0 +1,19 @@
+apiVersion: gateway.solo.io/v1
+kind: VirtualService
+metadata:
+  name: yjs-in-erlang-virtualservice
+  namespace: gloo-system # Gloo Edge 用の namespace。環境に合わせて変更してください。
+spec:
+  virtualHost:
+    domains:
+      - "*"
+    routes:
+      - matchers:
+          - prefix: "/" # 全てのパスにマッチする例。必要に応じて調整してください。
+        routeAction:
+          single:
+            upstream:
+              name: default-yjs-in-erlang-websocket-service-3000
+              namespace: gloo-system
+        options:
+          timeout: 0s # WebSocket 等長時間接続を維持する場合はタイムアウトを無効に設定

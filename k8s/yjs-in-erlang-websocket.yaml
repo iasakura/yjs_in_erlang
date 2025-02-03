@@ -22,9 +22,9 @@ spec:
               topologyKey: "kubernetes.io/hostname" # 各レプリカを異なるノードにスケジュール
       containers:
         - name: yjs-in-erlang-websocket
-          image: asia-east2-docker.pkg.dev/lucky-antler-449601-f2/yjs-in-erlang/yjs_in_erlang_websocket:4739998
+          image: asia-east2-docker.pkg.dev/lucky-antler-449601-f2/yjs-in-erlang/yjs_in_erlang_websocket:e01f588
           ports:
-            - containerPort: 3000 # DBの通信ポート
+            - containerPort: 3000
           volumeMounts:
             - name: data
               mountPath: /mnt
@@ -49,8 +49,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: yjs-in-erlang-websocket
+  name: yjs-in-erlang-websocket-service
+  labels:
+    app: yjs-in-erlang-websocket
 spec:
-  clusterIP: None # Headless Service
+  ports:
+    - port: 3000
   selector:
-    app: example
+    app: yjs-in-erlang-websocket
