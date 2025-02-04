@@ -13,7 +13,7 @@ spec:
         routeAction:
           single:
             upstream:
-              name: default-yjs-in-erlang-websocket-service-3000
+              name: default-yjs-in-erlang-websocket-service-80
               namespace: gloo-system
         options:
           timeout: 0s # WebSocket 等長時間接続を維持する場合はタイムアウトを無効に設定
