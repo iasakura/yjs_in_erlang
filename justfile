@@ -11,7 +11,7 @@ check:
 
 build-image:
     @echo "Building Docker image with tag: {{IMAGE_TAG}}"
-    docker buildx build -o type=docker --target runner --tag yjs_in_erlang_websocket:{{IMAGE_TAG}} .
+    docker buildx build -o type=docker --target runner --tag yjs_in_erlang_websocket:{{IMAGE_TAG}} -f docker/Dockerfile .
 
 # Push the image to Github Container Registry
 push-image: build-image
