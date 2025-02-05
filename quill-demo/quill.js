@@ -11,7 +11,7 @@ Quill.register("modules/cursors", QuillCursors);
 window.addEventListener("load", () => {
   const ydoc = new Y.Doc();
   const provider = new WebsocketProvider(
-    "ws://localhost:3000/ws", // use the public ws server
+    "ws://35.215.150.250:80/ws", // use the public ws server
     // `ws${location.protocol.slice(4)}//${location.host}/ws`, // alternatively: use the local ws server (run `npm start` in root directory)
     "quill-demo-2024/06",
     ydoc
