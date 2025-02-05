@@ -40,9 +40,10 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean
 # openssl needed by the crypto app
 RUN --mount=target=/var/lib/apt/lists,id=apt-lists,type=cache,sharing=locked \
     --mount=type=cache,id=apt,sharing=locked,target=/var/cache/apt \
-    apt update && apt install --no-install-recommends -y openssl ncurses-bin
+    apt update && apt install --no-install-recommends -y openssl ncurses-bin dnsutils
 
 COPY --from=releaser /opt/rel .
+COPY docker/run.sh /bin
 
-ENTRYPOINT ["/opt/yjs_in_erlang/bin/yjs_in_erlang"]
+ENTRYPOINT ["run.sh", "yjs-in-erlang-websocket.default.svc.cluster.local", "yjs_in_erlang@", "--", "/opt/yjs_in_erlang/bin/yjs_in_erlang"]
 CMD ["foreground"]

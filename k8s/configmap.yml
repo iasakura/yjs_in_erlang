@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yjs-in-erlang-websocket-config
+data:
+  COOKIE: "yjs_in_erlang"
+  YJS_IN_ERLANG_STORE_DIR: "/mnt"
